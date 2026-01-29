@@ -7,18 +7,16 @@ import {
     LayoutDashboard,
     Wallet,
     HandCoins,
-    CreditCard,
-    TrendingUp,
+    BarChart3,
     PlusCircle,
-    Sparkles
 } from 'lucide-react'
 
 const navItems = [
     { href: '/', label: 'Home', icon: LayoutDashboard },
     { href: '/assets', label: 'Assets', icon: Wallet },
-    { href: '/loans/given', label: 'Lent', icon: HandCoins },
-    { href: '/loans/taken', label: 'Owed', icon: CreditCard },
     { href: '/add', label: 'Add', icon: PlusCircle, isSpecial: true },
+    { href: '/loans/given', label: 'Loans', icon: HandCoins },
+    { href: '/reports', label: 'Reports', icon: BarChart3 },
 ]
 
 export function MobileNav() {

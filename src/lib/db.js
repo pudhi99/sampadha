@@ -150,6 +150,9 @@ export async function deletePayment(id) {
     return true
 }
 
+// Alias for consistency
+export const createLoanPayment = createPayment
+
 // ============ FINANCE SCHEMES ============
 
 export async function getFinanceSchemes() {

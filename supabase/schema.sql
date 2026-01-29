@@ -114,8 +114,18 @@ ALTER TABLE net_worth_history ENABLE ROW LEVEL SECURITY;
 
 -- Policies for public access (single user mode for now)
 -- You can modify these later for authenticated users
+
+DROP POLICY IF EXISTS "Allow all operations on assets" ON assets;
 CREATE POLICY "Allow all operations on assets" ON assets FOR ALL USING (true);
+
+DROP POLICY IF EXISTS "Allow all operations on loans" ON loans;
 CREATE POLICY "Allow all operations on loans" ON loans FOR ALL USING (true);
+
+DROP POLICY IF EXISTS "Allow all operations on loan_payments" ON loan_payments;
 CREATE POLICY "Allow all operations on loan_payments" ON loan_payments FOR ALL USING (true);
+
+DROP POLICY IF EXISTS "Allow all operations on finance_schemes" ON finance_schemes;
 CREATE POLICY "Allow all operations on finance_schemes" ON finance_schemes FOR ALL USING (true);
+
+DROP POLICY IF EXISTS "Allow all operations on net_worth_history" ON net_worth_history;
 CREATE POLICY "Allow all operations on net_worth_history" ON net_worth_history FOR ALL USING (true);

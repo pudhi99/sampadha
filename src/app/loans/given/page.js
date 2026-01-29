@@ -13,7 +13,10 @@ import {
     AlertTriangle,
     CheckCircle2,
     Clock,
-    XCircle
+    XCircle,
+    Receipt,
+    ChevronDown,
+    ChevronUp
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -34,7 +37,9 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select'
-import { getLoans, createLoan, updateLoan, deleteLoan } from '@/lib/db'
+import { getLoans, createLoan, updateLoan, deleteLoan, getPaymentsByLoanId } from '@/lib/db'
+import { PaymentDialog, PaymentHistory } from '@/components/loans/PaymentDialog'
+import { calculateLoanBalance, formatCurrency as formatCurrencyUtil } from '@/lib/calculations'
 
 // Animation variants
 const containerVariants = {
@@ -123,8 +128,12 @@ const statusConfig = {
     }
 }
 
-// Loan Card Component
-function LoanCard({ loan, onEdit, onDelete }) {
+// Loan Card Component with Payment Tracking
+function LoanCard({ loan, onEdit, onDelete, onPaymentAdded }) {
+    const [expanded, setExpanded] = useState(false)
+    const [payments, setPayments] = useState([])
+    const [loadingPayments, setLoadingPayments] = useState(false)
+
     const status = statusConfig[loan.status] || statusConfig.ACTIVE
     const StatusIcon = status.icon
     const daysOverdue = getDaysOverdue(loan.end_date)
@@ -135,13 +144,39 @@ function LoanCard({ loan, onEdit, onDelete }) {
         loan.end_date,
         loan.interest_type
     )
-    const expectedInterest = expectedAmount - Number(loan.principal)
+
+    // Calculate balance
+    const balance = calculateLoanBalance(loan, payments)
+    const totalPaid = balance.totalPaid
+
+    // Load payments when expanded
+    useEffect(() => {
+        if (expanded && payments.length === 0) {
+            loadPayments()
+        }
+    }, [expanded])
+
+    const loadPayments = async () => {
+        setLoadingPayments(true)
+        try {
+            const data = await getPaymentsByLoanId(loan.id)
+            setPayments(data || [])
+        } catch (error) {
+            console.error('Error loading payments:', error)
+        } finally {
+            setLoadingPayments(false)
+        }
+    }
+
+    const handlePaymentAdded = () => {
+        loadPayments()
+        if (onPaymentAdded) onPaymentAdded()
+    }
 
     return (
         <motion.div
             variants={itemVariants}
             layout
-            whileHover={{ y: -4 }}
             className="group"
         >
             <Card className="relative overflow-hidden bg-gradient-to-br from-amber-500/10 to-amber-600/5 border-0 floating-card">
@@ -198,6 +233,26 @@ function LoanCard({ loan, onEdit, onDelete }) {
                         </div>
                     </div>
 
+                    {/* Payment Progress */}
+                    {totalPaid > 0 && (
+                        <div className="mb-4">
+                            <div className="flex items-center justify-between text-sm mb-2">
+                                <span className="text-muted-foreground">Received</span>
+                                <span className="font-medium text-emerald-500">
+                                    {formatCurrency(totalPaid)} / {formatCurrency(expectedAmount)}
+                                </span>
+                            </div>
+                            <div className="h-2 bg-background/50 rounded-full overflow-hidden">
+                                <motion.div
+                                    className="h-full bg-emerald-500 rounded-full"
+                                    initial={{ width: 0 }}
+                                    animate={{ width: `${Math.min((totalPaid / expectedAmount) * 100, 100)}%` }}
+                                    transition={{ duration: 0.5, ease: 'easeOut' }}
+                                />
+                            </div>
+                        </div>
+                    )}
+
                     {/* Details */}
                     <div className="space-y-2 text-sm">
                         <div className="flex items-center justify-between">
@@ -225,7 +280,53 @@ function LoanCard({ loan, onEdit, onDelete }) {
                         )}
                     </div>
 
-                    {loan.notes && (
+                    {/* Action Buttons */}
+                    <div className="flex gap-2 mt-4 pt-4 border-t border-border">
+                        <PaymentDialog loan={loan} onPaymentAdded={handlePaymentAdded}>
+                            <Button variant="outline" size="sm" className="flex-1 gap-2">
+                                <Receipt className="w-4 h-4" />
+                                Add Payment
+                            </Button>
+                        </PaymentDialog>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setExpanded(!expanded)}
+                            className="gap-1"
+                        >
+                            {expanded ? (
+                                <>
+                                    <ChevronUp className="w-4 h-4" />
+                                    Hide
+                                </>
+                            ) : (
+                                <>
+                                    <ChevronDown className="w-4 h-4" />
+                                    History
+                                </>
+                            )}
+                        </Button>
+                    </div>
+
+                    {/* Expandable Payment History */}
+                    <AnimatePresence>
+                        {expanded && (
+                            <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.3 }}
+                                className="overflow-hidden"
+                            >
+                                <div className="mt-4 pt-4 border-t border-border">
+                                    <h4 className="text-sm font-semibold mb-3">Payment History</h4>
+                                    <PaymentHistory payments={payments} loading={loadingPayments} />
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+
+                    {loan.notes && !expanded && (
                         <p className="text-xs text-muted-foreground mt-3 pt-3 border-t border-border line-clamp-2">
                             {loan.notes}
                         </p>
@@ -554,6 +655,7 @@ export default function LoansGivenPage() {
                                 loan={loan}
                                 onEdit={handleEdit}
                                 onDelete={handleDelete}
+                                onPaymentAdded={fetchLoans}
                             />
                         ))}
                     </motion.div>

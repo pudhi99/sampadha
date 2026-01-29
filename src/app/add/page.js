@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import {
@@ -10,7 +10,8 @@ import {
     CreditCard,
     TrendingUp,
     ArrowLeft,
-    CheckCircle2
+    CheckCircle2,
+    Loader2
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -87,8 +88,8 @@ function TypeSelection({ onSelect, selectedType }) {
                         >
                             <Card
                                 className={`cursor-pointer transition-all ${isSelected
-                                        ? 'ring-2 ring-primary glow-primary'
-                                        : 'hover:scale-[1.02]'
+                                    ? 'ring-2 ring-primary glow-primary'
+                                    : 'hover:scale-[1.02]'
                                     } bg-gradient-to-br ${type.color} border-0`}
                                 onClick={() => onSelect(type.id)}
                             >
@@ -435,7 +436,6 @@ function FinanceForm({ onSubmit, loading }) {
 // Success State
 function SuccessState({ type, onAddAnother, onGoHome }) {
     const config = entryTypes.find(t => t.id === type) || entryTypes[0]
-    const Icon = config.icon
 
     return (
         <motion.div
@@ -463,7 +463,17 @@ function SuccessState({ type, onAddAnother, onGoHome }) {
     )
 }
 
-export default function AddPage() {
+// Loading fallback for Suspense
+function LoadingFallback() {
+    return (
+        <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+    )
+}
+
+// Main Add Content Component (uses useSearchParams)
+function AddPageContent() {
     const router = useRouter()
     const searchParams = useSearchParams()
     const initialType = searchParams.get('type') || null
@@ -584,5 +594,14 @@ export default function AddPage() {
                 </CardContent>
             </Card>
         </motion.div>
+    )
+}
+
+// Default export with Suspense boundary
+export default function AddPage() {
+    return (
+        <Suspense fallback={<LoadingFallback />}>
+            <AddPageContent />
+        </Suspense>
     )
 }

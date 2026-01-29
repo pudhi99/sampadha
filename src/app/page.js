@@ -19,6 +19,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import Link from 'next/link'
 import { getDashboardSummary, getLoans } from '@/lib/db'
+import { AnimatedCurrency } from '@/components/ui/animated'
+import { WelcomeCard } from '@/components/ui/empty-state'
 
 // Animation variants
 const containerVariants = {
@@ -79,7 +81,7 @@ function NetWorthCard({ netWorth, loading }) {
                   animate={{ scale: 1, opacity: 1 }}
                   transition={{ delay: 0.2, type: 'spring' }}
                 >
-                  {formatCurrency(netWorth)}
+                  <AnimatedCurrency value={netWorth} />
                 </motion.h2>
               )}
               <div className="flex items-center gap-1 mt-2 text-muted-foreground">
@@ -214,7 +216,7 @@ function QuickActions() {
   const actions = [
     { label: 'Add Asset', icon: Wallet, href: '/add?type=asset', color: 'bg-emerald-500/20 text-emerald-500' },
     { label: 'Record Loan', icon: HandCoins, href: '/add?type=loan-given', color: 'bg-amber-500/20 text-amber-500' },
-    { label: 'Track EMI', icon: CreditCard, href: '/add?type=loan-taken', color: 'bg-red-500/20 text-red-500' },
+    { label: 'View Reports', icon: TrendingUp, href: '/reports', color: 'bg-violet-500/20 text-violet-500' },
   ]
 
   return (
@@ -284,6 +286,9 @@ export default function DashboardPage() {
       animate="visible"
       className="space-y-6 max-w-4xl mx-auto"
     >
+      {/* Welcome Card for new users */}
+      {!loading && summary?.netWorth === 0 && <WelcomeCard />}
+
       {/* Net Worth Hero */}
       <NetWorthCard netWorth={summary?.netWorth || 0} loading={loading} />
 
