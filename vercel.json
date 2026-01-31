@@ -2,7 +2,7 @@
     "crons": [
         {
             "path": "/api/cron/daily-prices",
-            "schedule": "30 2,3 * * *"
+            "schedule": "0 9 * * *"
         }
     ]
 }
