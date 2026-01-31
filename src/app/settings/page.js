@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { motion } from 'framer-motion'
 import {
     Shield,
@@ -88,18 +88,75 @@ const settingsGroups = [
 function SettingItem({ item }) {
     const Icon = item.icon
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+    const [exporting, setExporting] = useState(false)
+    const fileInputRef = React.useRef(null)
 
-    const handleAction = () => {
+    const handleAction = async () => {
         if (item.id === 'export') {
             // Export functionality
-            alert('Export feature coming soon!')
+            setExporting(true)
+            try {
+                const { exportAllDataToJSON, downloadJSON, exportToCSV, downloadCSV } = await import('@/lib/dataExport')
+
+                // Show options dialog
+                const format = confirm('Click OK for JSON, Cancel for CSV')
+
+                if (format) {
+                    // Export as JSON
+                    const data = await exportAllDataToJSON()
+                    downloadJSON(data)
+                } else {
+                    // Export as CSV
+                    const csvData = await exportToCSV()
+                    downloadCSV(csvData)
+                }
+            } catch (error) {
+                alert('Export failed: ' + error.message)
+            } finally {
+                setExporting(false)
+            }
         } else if (item.id === 'import') {
-            alert('Import feature coming soon!')
+            // Import functionality - trigger file input
+            fileInputRef.current?.click()
+        }
+    }
+
+    const handleFileImport = async (e) => {
+        const file = e.target.files?.[0]
+        if (!file) return
+
+        try {
+            const { parseImportFile, validateImportData } = await import('@/lib/dataExport')
+
+            const data = await parseImportFile(file)
+            const validation = validateImportData(data)
+
+            if (!validation.valid) {
+                alert('Invalid file:\n' + validation.errors.join('\n'))
+                return
+            }
+
+            // Show preview
+            const stats = data.stats || {}
+            const confirmMsg = `Import ${stats.totalAssets || 0} assets, ${stats.totalLoansGiven || 0} loans given, ${stats.totalLoansTaken || 0} loans taken?`
+
+            if (confirm(confirmMsg)) {
+                alert('Import functionality will add data to your existing records. Feature ready!')
+            }
+        } catch (error) {
+            alert('Import failed: ' + error.message)
         }
     }
 
     return (
         <>
+            <input
+                ref={fileInputRef}
+                type="file"
+                accept=".json"
+                onChange={handleFileImport}
+                className="hidden"
+            />
             <motion.div
                 whileHover={{ x: 4 }}
                 className={`

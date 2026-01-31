@@ -215,7 +215,7 @@ export function PaymentHistory({ payments, loading }) {
                                 +{formatCurrency(payment.amount)}
                             </p>
                             <p className="text-xs text-muted-foreground capitalize">
-                                {payment.payment_type.toLowerCase()} payment
+                                {(payment.payment_type || payment.type || 'payment').toLowerCase()} payment
                             </p>
                         </div>
                     </div>

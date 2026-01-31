@@ -39,6 +39,8 @@ import {
 import { getLoans, createLoan, updateLoan, deleteLoan, getPaymentsByLoanId } from '@/lib/db'
 import { PaymentDialog, PaymentHistory } from '@/components/loans/PaymentDialog'
 import { calculateLoanBalance } from '@/lib/calculations'
+import { useAuth } from '@/context/AuthContext'
+import { demoLoans, demoPayments } from '@/lib/demoData'
 
 // Animation variants
 const containerVariants = {
@@ -62,12 +64,13 @@ const itemVariants = {
 // Format currency
 function formatCurrency(amount) {
     const num = Number(amount) || 0
-    if (num >= 100000) {
+    if (num < 100000) {
+        return `₹${num.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
+    } else if (num >= 100000 && num < 10000000) {
         return `₹${(num / 100000).toFixed(2)}L`
-    } else if (num >= 1000) {
-        return `₹${(num / 1000).toFixed(1)}K`
+    } else {
+        return `₹${(num / 10000000).toFixed(2)}Cr`
     }
-    return `₹${num.toLocaleString('en-IN')}`
 }
 
 // Format date
@@ -97,7 +100,7 @@ function calculateRemaining(principal, startDate) {
 }
 
 // Loan Card Component with Payment Tracking
-function LoanCard({ loan, onEdit, onDelete, onPaymentAdded }) {
+function LoanCard({ loan, onEdit, onDelete, onPaymentAdded, isDemo }) {
     const [expanded, setExpanded] = useState(false)
     const [payments, setPayments] = useState([])
     const [loadingPayments, setLoadingPayments] = useState(false)
@@ -124,8 +127,14 @@ function LoanCard({ loan, onEdit, onDelete, onPaymentAdded }) {
     const loadPayments = async () => {
         setLoadingPayments(true)
         try {
-            const data = await getPaymentsByLoanId(loan.id)
-            setPayments(data || [])
+            if (isDemo) {
+                // Use demo payments from imported data
+                const data = demoPayments.filter(p => p.loan_id === loan.id)
+                setPayments(data)
+            } else {
+                const data = await getPaymentsByLoanId(loan.id)
+                setPayments(data || [])
+            }
         } catch (error) {
             console.error('Error loading payments:', error)
         } finally {
@@ -454,6 +463,7 @@ function EmptyState({ onAdd }) {
 }
 
 export default function LoansTakenPage() {
+    const { isDemo } = useAuth()
     const [loans, setLoans] = useState([])
     const [loading, setLoading] = useState(true)
     const [dialogOpen, setDialogOpen] = useState(false)
@@ -461,12 +471,17 @@ export default function LoansTakenPage() {
 
     useEffect(() => {
         fetchLoans()
-    }, [])
+    }, [isDemo])
 
     const fetchLoans = async () => {
         try {
-            const data = await getLoans('TAKEN')
-            setLoans(data || [])
+            if (isDemo) {
+                const takenLoans = demoLoans.filter(l => l.type === 'TAKEN')
+                setLoans(takenLoans)
+            } else {
+                const data = await getLoans('TAKEN')
+                setLoans(data || [])
+            }
         } catch (error) {
             console.error('Error fetching loans:', error)
         } finally {
@@ -592,6 +607,7 @@ export default function LoansTakenPage() {
                                 onEdit={handleEdit}
                                 onDelete={handleDelete}
                                 onPaymentAdded={fetchLoans}
+                                isDemo={isDemo}
                             />
                         ))}
                     </motion.div>

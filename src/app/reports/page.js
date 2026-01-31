@@ -14,11 +14,19 @@ import {
     Wallet,
     Coins,
     HandCoins,
-    CreditCard
+    CreditCard,
+    Filter
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select'
 import {
     AreaChart,
     Area,
@@ -32,10 +40,16 @@ import {
     Cell,
     BarChart,
     Bar,
-    Legend
+    Legend,
+    LineChart,
+    Line
 } from 'recharts'
 import { getAssets, getLoans, getFinanceSchemes } from '@/lib/db'
 import { formatCurrency, calculateAccruedInterest, calculateSchemeReturns } from '@/lib/calculations'
+import { getNetWorthHistory, getNetWorthTrend, captureNetWorthSnapshot } from '@/lib/netWorthHistory'
+import { useAuth } from '@/context/AuthContext'
+import { demoAssets, demoLoans, demoFinanceSchemes, demoNetWorthHistory, getDemoTotals } from '@/lib/demoData'
+
 
 // Color palette for charts
 const COLORS = {
@@ -330,33 +344,70 @@ function LoanStatusOverview({ loansGiven, loansTaken }) {
 }
 
 export default function ReportsPage() {
+    const { isDemo } = useAuth()
     const [loading, setLoading] = useState(true)
     const [assets, setAssets] = useState([])
     const [loansGiven, setLoansGiven] = useState([])
     const [loansTaken, setLoansTaken] = useState([])
     const [schemes, setSchemes] = useState([])
+    const [netWorthHistory, setNetWorthHistory] = useState([])
+    const [trend, setTrend] = useState({ changePercent: 0 })
+    const [dateRange, setDateRange] = useState('30') // days
+    const [capturingSnapshot, setCapturingSnapshot] = useState(false)
 
     useEffect(() => {
         loadData()
-    }, [])
+    }, [dateRange, isDemo])
 
     const loadData = async () => {
         setLoading(true)
         try {
-            const [assetsData, loansData, schemesData] = await Promise.all([
-                getAssets(),
-                getLoans(),
-                getFinanceSchemes()
-            ])
+            if (isDemo) {
+                // Use demo data
+                setAssets(demoAssets)
+                setLoansGiven(demoLoans.filter(l => l.type === 'GIVEN'))
+                setLoansTaken(demoLoans.filter(l => l.type === 'TAKEN'))
+                setSchemes(demoFinanceSchemes)
+                setNetWorthHistory(demoNetWorthHistory)
 
-            setAssets(assetsData || [])
-            setLoansGiven((loansData || []).filter(l => l.type === 'GIVEN'))
-            setLoansTaken((loansData || []).filter(l => l.type === 'TAKEN'))
-            setSchemes(schemesData || [])
+                // Calculate demo trend
+                const current = demoNetWorthHistory[demoNetWorthHistory.length - 1]?.net_worth || 0
+                const previous = demoNetWorthHistory[0]?.net_worth || 0
+                const change = current - previous
+                const changePercent = previous !== 0 ? ((change / previous) * 100) : 0
+                setTrend({ current, previous, change, changePercent: parseFloat(changePercent.toFixed(2)) })
+            } else {
+                const [assetsData, loansData, schemesData, historyData, trendData] = await Promise.all([
+                    getAssets(),
+                    getLoans(),
+                    getFinanceSchemes(),
+                    getNetWorthHistory(parseInt(dateRange)),
+                    getNetWorthTrend(parseInt(dateRange))
+                ])
+
+                setAssets(assetsData || [])
+                setLoansGiven((loansData || []).filter(l => l.type === 'GIVEN'))
+                setLoansTaken((loansData || []).filter(l => l.type === 'TAKEN'))
+                setSchemes(schemesData || [])
+                setNetWorthHistory(historyData || [])
+                setTrend(trendData || { changePercent: 0 })
+            }
         } catch (error) {
             console.error('Error loading data:', error)
         } finally {
             setLoading(false)
+        }
+    }
+
+    const handleCaptureSnapshot = async () => {
+        setCapturingSnapshot(true)
+        try {
+            await captureNetWorthSnapshot()
+            await loadData()
+        } catch (error) {
+            console.error('Error capturing snapshot:', error)
+        } finally {
+            setCapturingSnapshot(false)
         }
     }
 
@@ -384,17 +435,19 @@ export default function ReportsPage() {
         { name: 'Finance', value: totalFinance },
     ].filter(item => item.value > 0)
 
-    // Mock net worth trend (in production, this would come from net_worth_history table)
-    const netWorthTrendData = [
-        { month: 'Aug', value: netWorth * 0.85 },
-        { month: 'Sep', value: netWorth * 0.88 },
-        { month: 'Oct', value: netWorth * 0.92 },
-        { month: 'Nov', value: netWorth * 0.96 },
-        { month: 'Dec', value: netWorth * 0.98 },
-        { month: 'Jan', value: netWorth },
-    ]
+    // Net worth trend data from database
+    const netWorthTrendData = netWorthHistory.length > 0
+        ? netWorthHistory.map(h => ({
+            month: new Date(h.date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }),
+            value: Number(h.net_worth),
+            assets: Number(h.total_assets),
+            liabilities: Number(h.total_liabilities)
+        }))
+        : [
+            { month: 'Current', value: netWorth, assets: totalAssets + totalLoansGiven + totalFinance, liabilities: totalLoansTaken }
+        ]
 
-    // Mock monthly summary
+    // Mock monthly summary (future: track actual income/expense)
     const monthlySummaryData = [
         { month: 'Aug', income: 45000, expense: 35000 },
         { month: 'Sep', income: 52000, expense: 38000 },
@@ -424,10 +477,32 @@ export default function ReportsPage() {
                     <h1 className="text-2xl font-bold">Reports</h1>
                     <p className="text-muted-foreground">Financial analytics & insights</p>
                 </div>
-                <Button variant="outline" onClick={loadData}>
-                    <RefreshCw className="w-4 h-4 mr-2" />
-                    Refresh
-                </Button>
+                <div className="flex items-center gap-2">
+                    <Select value={dateRange} onValueChange={setDateRange}>
+                        <SelectTrigger className="w-[130px]">
+                            <Filter className="w-4 h-4 mr-2" />
+                            <SelectValue placeholder="Date range" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="7">Last 7 days</SelectItem>
+                            <SelectItem value="30">Last 30 days</SelectItem>
+                            <SelectItem value="90">Last 90 days</SelectItem>
+                            <SelectItem value="365">Last year</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <Button
+                        variant="outline"
+                        onClick={handleCaptureSnapshot}
+                        disabled={capturingSnapshot}
+                    >
+                        <TrendingUp className="w-4 h-4 mr-2" />
+                        {capturingSnapshot ? 'Saving...' : 'Capture'}
+                    </Button>
+                    <Button variant="outline" onClick={loadData}>
+                        <RefreshCw className="w-4 h-4 mr-2" />
+                        Refresh
+                    </Button>
+                </div>
             </div>
 
             {/* Stats Cards */}
@@ -435,8 +510,8 @@ export default function ReportsPage() {
                 <StatCard
                     title="Net Worth"
                     value={formatCurrency(netWorth)}
-                    change="+12% this month"
-                    changeType="up"
+                    change={trend.changePercent !== 0 ? `${trend.changePercent > 0 ? '+' : ''}${trend.changePercent.toFixed(1)}% (${dateRange}d)` : undefined}
+                    changeType={trend.changePercent >= 0 ? 'up' : 'down'}
                     icon={Wallet}
                     color="bg-emerald-500/20 text-emerald-500"
                 />

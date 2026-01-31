@@ -11,7 +11,11 @@ import {
     Edit,
     MoreVertical,
     Building2,
-    Sparkles
+    Sparkles,
+    Home,
+    Car,
+    MapPin,
+    Tv
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -34,6 +38,12 @@ import {
     SelectValue,
 } from '@/components/ui/select'
 import { getAssets, createAsset, updateAsset, deleteAsset } from '@/lib/db'
+import { getCurrentGoldPrice, calculateGoldValue } from '@/lib/goldPrice'
+import { ImageUpload } from '@/components/assets/ImageUpload'
+import { AssetHelpDialog } from '@/components/assets/AssetHelpDialog'
+import { uploadAssetImage } from '@/lib/imageUpload'
+import { useAuth } from '@/context/AuthContext'
+import { demoAssets } from '@/lib/demoData'
 
 // Animation variants
 const containerVariants = {
@@ -62,12 +72,13 @@ const itemVariants = {
 // Format currency
 function formatCurrency(amount) {
     const num = Number(amount) || 0
-    if (num >= 100000) {
+    if (num < 100000) {
+        return `₹${num.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
+    } else if (num >= 100000 && num < 10000000) {
         return `₹${(num / 100000).toFixed(2)}L`
-    } else if (num >= 1000) {
-        return `₹${(num / 1000).toFixed(1)}K`
+    } else {
+        return `₹${(num / 10000000).toFixed(2)}Cr`
     }
-    return `₹${num.toLocaleString('en-IN')}`
 }
 
 // Asset type config
@@ -95,7 +106,24 @@ const assetTypeConfig = {
         iconBg: 'bg-violet-500/20',
         iconColor: 'text-violet-500',
         glow: 'glow-primary'
+    },
+    PHYSICAL: {
+        label: 'Physical Assets',
+        icon: Home,
+        color: 'from-blue-500/20 to-blue-600/5',
+        iconBg: 'bg-blue-500/20',
+        iconColor: 'text-blue-500',
+        glow: 'glow-primary'
     }
+}
+
+// Category config for physical assets
+const categoryConfig = {
+    PROPERTY: { label: 'Property', icon: Home, color: 'text-blue-500' },
+    VEHICLE: { label: 'Vehicle', icon: Car, color: 'text-orange-500' },
+    LAND: { label: 'Land', icon: MapPin, color: 'text-green-500' },
+    ELECTRONICS: { label: 'Electronics', icon: Tv, color: 'text-purple-500' },
+    OTHER: { label: 'Other', icon: Building2, color: 'text-gray-500' }
 }
 
 // Asset Card Component
@@ -183,18 +211,38 @@ function AssetForm({ asset, onSubmit, onClose }) {
         current_value: asset?.current_value || '',
         purchase_value: asset?.purchase_value || '',
         notes: asset?.notes || '',
-        metadata: asset?.metadata || {}
+        metadata: asset?.metadata || {},
+        category: asset?.category || 'OTHER',
+        is_liability: asset?.is_liability || false,
+        image_url: asset?.image_url || ''
     })
     const [loading, setLoading] = useState(false)
+    const [fetchingPrice, setFetchingPrice] = useState(false)
+    const [imageFile, setImageFile] = useState(null)
 
     const handleSubmit = async (e) => {
         e.preventDefault()
         setLoading(true)
         try {
+            let imageUrl = formData.image_url
+
+            // Upload image if a new file was selected
+            if (imageFile && formData.type === 'PHYSICAL') {
+                try {
+                    const result = await uploadAssetImage(imageFile, asset?.id || 'new')
+                    imageUrl = result.url
+                } catch (imgError) {
+                    console.error('Image upload failed:', imgError)
+                }
+            }
+
             await onSubmit({
                 ...formData,
                 current_value: Number(formData.current_value) || 0,
                 purchase_value: Number(formData.purchase_value) || 0,
+                image_url: imageUrl,
+                category: formData.type === 'PHYSICAL' ? formData.category : null,
+                is_liability: formData.type === 'PHYSICAL' ? formData.is_liability : false,
                 metadata: formData.type === 'GOLD' ? {
                     grams: Number(formData.metadata.grams) || 0,
                     purity: formData.metadata.purity || '22K',
@@ -235,48 +283,186 @@ function AssetForm({ asset, onSubmit, onClose }) {
                         <SelectItem value="CASH">Cash & Bank</SelectItem>
                         <SelectItem value="GOLD">Gold</SelectItem>
                         <SelectItem value="INVESTMENT">Investment</SelectItem>
+                        <SelectItem value="PHYSICAL">Physical Asset</SelectItem>
                     </SelectContent>
                 </Select>
             </div>
 
-            {formData.type === 'GOLD' && (
-                <div className="grid grid-cols-2 gap-4">
+            {/* Physical Asset Fields */}
+            {formData.type === 'PHYSICAL' && (
+                <>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="category">Category</Label>
+                            <Select
+                                value={formData.category}
+                                onValueChange={(value) => setFormData({ ...formData, category: value })}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="PROPERTY">🏠 Property</SelectItem>
+                                    <SelectItem value="VEHICLE">🚗 Vehicle</SelectItem>
+                                    <SelectItem value="LAND">🗺️ Land</SelectItem>
+                                    <SelectItem value="ELECTRONICS">📱 Electronics</SelectItem>
+                                    <SelectItem value="OTHER">📦 Other</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Asset Type</Label>
+                            <div className="flex items-center gap-4 h-10">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="radio"
+                                        name="is_liability"
+                                        checked={!formData.is_liability}
+                                        onChange={() => setFormData({ ...formData, is_liability: false })}
+                                        className="w-4 h-4"
+                                    />
+                                    <span className="text-sm text-emerald-500">✓ Asset</span>
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="radio"
+                                        name="is_liability"
+                                        checked={formData.is_liability}
+                                        onChange={() => setFormData({ ...formData, is_liability: true })}
+                                        className="w-4 h-4"
+                                    />
+                                    <span className="text-sm text-red-500">⚠ Liability</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
                     <div className="space-y-2">
-                        <Label htmlFor="grams">Weight (grams)</Label>
-                        <Input
-                            id="grams"
-                            type="number"
-                            step="0.01"
-                            placeholder="50"
-                            value={formData.metadata.grams || ''}
-                            onChange={(e) => setFormData({
-                                ...formData,
-                                metadata: { ...formData.metadata, grams: e.target.value }
-                            })}
+                        <Label>Photo (optional)</Label>
+                        <ImageUpload
+                            value={formData.image_url}
+                            onChange={(file) => {
+                                setImageFile(file)
+                            }}
+                            onRemove={() => {
+                                setImageFile(null)
+                                setFormData({ ...formData, image_url: '' })
+                            }}
                         />
                     </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="purity">Purity</Label>
-                        <Select
-                            value={formData.metadata.purity || '22K'}
-                            onValueChange={(value) => setFormData({
-                                ...formData,
-                                metadata: { ...formData.metadata, purity: value }
-                            })}
-                        >
-                            <SelectTrigger>
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="24K">24K</SelectItem>
-                                <SelectItem value="22K">22K</SelectItem>
-                                <SelectItem value="18K">18K</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                </div>
+                    {formData.is_liability && (
+                        <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20">
+                            <p className="text-sm text-red-400">
+                                ⚠ Liabilities reduce your net worth. Mark items with ongoing loans, EMIs, or depreciation as liabilities.
+                            </p>
+                        </div>
+                    )}
+                </>
             )}
 
+            {formData.type === 'GOLD' && (
+                <>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="grams">Weight (grams)</Label>
+                            <Input
+                                id="grams"
+                                type="number"
+                                step="0.01"
+                                placeholder="50"
+                                value={formData.metadata.grams || ''}
+                                onChange={(e) => setFormData({
+                                    ...formData,
+                                    metadata: { ...formData.metadata, grams: e.target.value }
+                                })}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="purity">Purity</Label>
+                            <Select
+                                value={formData.metadata.purity || '22K'}
+                                onValueChange={(value) => setFormData({
+                                    ...formData,
+                                    metadata: { ...formData.metadata, purity: value }
+                                })}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="24K">24K</SelectItem>
+                                    <SelectItem value="22K">22K</SelectItem>
+                                    <SelectItem value="18K">18K</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="rate_per_gram">Rate per Gram (₹)</Label>
+                        <div className="flex gap-2">
+                            <Input
+                                id="rate_per_gram"
+                                type="number"
+                                placeholder="6500"
+                                value={formData.metadata.rate_per_gram || ''}
+                                onChange={(e) => {
+                                    const rate = e.target.value
+                                    setFormData({
+                                        ...formData,
+                                        metadata: { ...formData.metadata, rate_per_gram: rate },
+                                        current_value: formData.metadata.grams && rate
+                                            ? calculateGoldValue(
+                                                Number(formData.metadata.grams),
+                                                formData.metadata.purity === '24K' ? 24 : formData.metadata.purity === '22K' ? 22 : 18,
+                                                Number(rate)
+                                            )
+                                            : formData.current_value
+                                    })
+                                }}
+                            />
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={async () => {
+                                    setFetchingPrice(true)
+                                    try {
+                                        const goldPrice = await getCurrentGoldPrice()
+                                        const purityNum = formData.metadata.purity === '24K' ? 24 : formData.metadata.purity === '22K' ? 22 : 18
+                                        const currentValue = formData.metadata.grams
+                                            ? calculateGoldValue(Number(formData.metadata.grams), purityNum, goldPrice.pricePerGram)
+                                            : ''
+                                        setFormData({
+                                            ...formData,
+                                            metadata: { ...formData.metadata, rate_per_gram: goldPrice.pricePerGram },
+                                            current_value: currentValue
+                                        })
+                                    } catch (error) {
+                                        console.error('Failed to fetch gold price', error)
+                                    } finally {
+                                        setFetchingPrice(false)
+                                    }
+                                }}
+                                disabled={fetchingPrice}
+                                className="whitespace-nowrap"
+                            >
+                                {fetchingPrice ? 'Fetching...' : "Today's Price"}
+                            </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground">Current market rate updates automatically</p>
+                    </div>
+
+                    {formData.metadata.grams && formData.metadata.rate_per_gram && (
+                        <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                            <p className="text-sm text-amber-500">
+                                Calculated Value: {formatCurrency(calculateGoldValue(
+                                    Number(formData.metadata.grams),
+                                    formData.metadata.purity === '24K' ? 24 : formData.metadata.purity === '22K' ? 22 : 18,
+                                    Number(formData.metadata.rate_per_gram)
+                                ))}
+                            </p>
+                        </div>
+                    )}
+                </>
+            )}
             <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                     <Label htmlFor="purchase_value">Purchase Value (₹)</Label>
@@ -319,7 +505,7 @@ function AssetForm({ asset, onSubmit, onClose }) {
                     {loading ? 'Saving...' : (asset ? 'Update' : 'Add Asset')}
                 </Button>
             </div>
-        </form>
+        </form >
     )
 }
 
@@ -354,6 +540,7 @@ function EmptyState({ type, onAdd }) {
 }
 
 export default function AssetsPage() {
+    const { isDemo } = useAuth()
     const [assets, setAssets] = useState([])
     const [loading, setLoading] = useState(true)
     const [activeTab, setActiveTab] = useState('ALL')
@@ -363,12 +550,16 @@ export default function AssetsPage() {
     // Fetch assets
     useEffect(() => {
         fetchAssets()
-    }, [])
+    }, [isDemo])
 
     const fetchAssets = async () => {
         try {
-            const data = await getAssets()
-            setAssets(data || [])
+            if (isDemo) {
+                setAssets(demoAssets)
+            } else {
+                const data = await getAssets()
+                setAssets(data || [])
+            }
         } catch (error) {
             console.error('Error fetching assets:', error)
         } finally {
@@ -425,9 +616,12 @@ export default function AssetsPage() {
         >
             {/* Header */}
             <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-2xl font-bold">Assets</h1>
-                    <p className="text-muted-foreground">Manage your cash, gold, and investments</p>
+                <div className="flex items-center gap-2">
+                    <div>
+                        <h1 className="text-2xl font-bold">Assets</h1>
+                        <p className="text-muted-foreground">Manage your assets & physical property</p>
+                    </div>
+                    <AssetHelpDialog />
                 </div>
                 <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
                     <DialogTrigger asChild>
@@ -478,7 +672,7 @@ export default function AssetsPage() {
 
             {/* Tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-4 mb-6">
+                <TabsList className="grid w-full grid-cols-5 mb-6">
                     <TabsTrigger value="ALL" className="gap-2">
                         <Sparkles className="w-4 h-4" />
                         <span className="hidden sm:inline">All</span>
@@ -494,6 +688,10 @@ export default function AssetsPage() {
                     <TabsTrigger value="INVESTMENT" className="gap-2">
                         <TrendingUp className="w-4 h-4" />
                         <span className="hidden sm:inline">Invest</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="PHYSICAL" className="gap-2">
+                        <Home className="w-4 h-4" />
+                        <span className="hidden sm:inline">Physical</span>
                     </TabsTrigger>
                 </TabsList>
 
@@ -527,6 +725,6 @@ export default function AssetsPage() {
                     )}
                 </AnimatePresence>
             </Tabs>
-        </motion.div>
+        </motion.div >
     )
 }

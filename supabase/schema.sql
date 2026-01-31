@@ -6,15 +6,18 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Assets Table (Cash, Gold, Investments)
 CREATE TABLE IF NOT EXISTS assets (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  name TEXT NOT NULL,
-  type TEXT NOT NULL CHECK (type IN ('CASH', 'GOLD', 'INVESTMENT')),
-  current_value DECIMAL(15, 2) NOT NULL DEFAULT 0,
-  purchase_value DECIMAL(15, 2) NOT NULL DEFAULT 0,
-  metadata JSONB DEFAULT '{}',
-  notes TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name TEXT NOT NULL,
+    type TEXT CHECK (type IN ('CASH', 'GOLD', 'INVESTMENT')) NOT NULL,
+    current_value DECIMAL(15, 2) NOT NULL DEFAULT 0,
+    purchase_value DECIMAL(15, 2) DEFAULT 0,
+    metadata JSONB DEFAULT '{}',
+    notes TEXT,
+    image_url TEXT,
+    category TEXT CHECK (category IN ('PROPERTY', 'VEHICLE', 'LAND', 'ELECTRONICS', 'OTHER')),
+    is_liability BOOLEAN DEFAULT false,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Loans Table (Given & Taken)
@@ -129,3 +132,45 @@ CREATE POLICY "Allow all operations on finance_schemes" ON finance_schemes FOR A
 
 DROP POLICY IF EXISTS "Allow all operations on net_worth_history" ON net_worth_history;
 CREATE POLICY "Allow all operations on net_worth_history" ON net_worth_history FOR ALL USING (true);
+
+-- Metals Price History Table (for tracking gold, silver, copper prices)
+CREATE TABLE IF NOT EXISTS metals_price_history (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  metal TEXT NOT NULL CHECK (metal IN ('GOLD', 'SILVER', 'COPPER')),
+  date DATE NOT NULL DEFAULT CURRENT_DATE,
+  price_per_gram DECIMAL(10, 2) NOT NULL,
+  price_per_10g DECIMAL(10, 2) NOT NULL,
+  currency TEXT DEFAULT 'INR',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(metal, date)
+);
+
+-- Notifications Table (for daily price alerts and other notifications)
+CREATE TABLE IF NOT EXISTS notifications (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  title TEXT NOT NULL,
+  message TEXT NOT NULL,
+  type TEXT CHECK (type IN ('PRICE_ALERT', 'REMINDER', 'INFO', 'WARNING')) NOT NULL,
+  metal TEXT CHECK (metal IN ('GOLD', 'SILVER', 'COPPER')),
+  price_change DECIMAL(10, 2),
+  is_read BOOLEAN DEFAULT false,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create indexes for price history
+CREATE INDEX IF NOT EXISTS idx_metals_price_history_metal ON metals_price_history(metal);
+CREATE INDEX IF NOT EXISTS idx_metals_price_history_date ON metals_price_history(date);
+CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read);
+
+-- Enable RLS for new tables
+ALTER TABLE metals_price_history ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+
+-- Policies for new tables
+DROP POLICY IF EXISTS "Allow all operations on metals_price_history" ON metals_price_history;
+CREATE POLICY "Allow all operations on metals_price_history" ON metals_price_history FOR ALL USING (true);
+
+DROP POLICY IF EXISTS "Allow all operations on notifications" ON notifications;
+CREATE POLICY "Allow all operations on notifications" ON notifications FOR ALL USING (true);
+

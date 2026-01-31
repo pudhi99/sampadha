@@ -1,6 +1,7 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
+import Image from 'next/image'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import {
@@ -12,7 +13,9 @@ import {
     PlusCircle,
     Settings,
     Sparkles,
-    BarChart3
+    BarChart3,
+    Coins,
+    Book
 } from 'lucide-react'
 
 const navItems = [
@@ -21,7 +24,9 @@ const navItems = [
     { href: '/loans/given', label: 'Loans Given', icon: HandCoins },
     { href: '/loans/taken', label: 'Loans Taken', icon: CreditCard },
     { href: '/finance', label: 'Finance', icon: TrendingUp },
+    { href: '/prices', label: 'Prices', icon: Coins },
     { href: '/reports', label: 'Reports', icon: BarChart3 },
+    { href: '/guide', label: 'Guide', icon: Book },
     { href: '/add', label: 'Add New', icon: PlusCircle },
     { href: '/settings', label: 'Settings', icon: Settings },
 ]
@@ -34,13 +39,9 @@ export function Sidebar() {
             {/* Logo */}
             <div className="p-6 border-b border-sidebar-border">
                 <Link href="/" className="flex items-center gap-3">
-                    <motion.div
-                        className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-chart-2 flex items-center justify-center"
-                        whileHover={{ scale: 1.05, rotate: 5 }}
-                        whileTap={{ scale: 0.95 }}
-                    >
-                        <Sparkles className="w-5 h-5 text-primary-foreground" />
-                    </motion.div>
+                    <div className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center bg-black/50 border border-white/10">
+                        <Image src="/logo-192.png" alt="Logo" width={40} height={40} className="w-full h-full object-cover p-1" />
+                    </div>
                     <span className="text-xl font-bold gradient-text">Sampadha</span>
                 </Link>
             </div>

@@ -21,6 +21,8 @@ import Link from 'next/link'
 import { getDashboardSummary, getLoans } from '@/lib/db'
 import { AnimatedCurrency } from '@/components/ui/animated'
 import { WelcomeCard } from '@/components/ui/empty-state'
+import { useAuth } from '@/context/AuthContext'
+import { demoAssets, demoLoans, demoFinanceSchemes, getDemoTotals } from '@/lib/demoData'
 
 // Animation variants
 const containerVariants = {
@@ -49,12 +51,18 @@ const itemVariants = {
 // Format currency
 function formatCurrency(amount) {
   const num = Number(amount) || 0
-  if (num >= 100000) {
-    return `₹${(num / 100000).toFixed(2)}L`
-  } else if (num >= 1000) {
-    return `₹${(num / 1000).toFixed(1)}K`
+  // Show full numbers up to 99,999
+  if (num < 100000) {
+    return `₹${num.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
   }
-  return `₹${num.toLocaleString('en-IN')}`
+  // Show in lakhs for 1,00,000 and above
+  else if (num >= 100000 && num < 10000000) {
+    return `₹${(num / 100000).toFixed(2)}L`
+  }
+  // Show in crores for 1,00,00,000 and above
+  else {
+    return `₹${(num / 10000000).toFixed(2)}Cr`
+  }
 }
 
 // Net Worth Card Component
@@ -257,6 +265,7 @@ function QuickActions() {
 }
 
 export default function DashboardPage() {
+  const { isDemo } = useAuth()
   const [summary, setSummary] = useState(null)
   const [loans, setLoans] = useState([])
   const [loading, setLoading] = useState(true)
@@ -264,12 +273,38 @@ export default function DashboardPage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const [summaryData, loansData] = await Promise.all([
-          getDashboardSummary(),
-          getLoans()
-        ])
-        setSummary(summaryData)
-        setLoans(loansData || [])
+        if (isDemo) {
+          // Use demo data
+          const totals = getDemoTotals()
+          const loansGiven = demoLoans.filter(l => l.type === 'GIVEN')
+          const loansTaken = demoLoans.filter(l => l.type === 'TAKEN')
+
+          setSummary({
+            netWorth: totals.netWorth,
+            totalAssets: totals.totalAssets,
+            totalLiabilities: totals.totalLiabilities,
+            loansGiven: {
+              total: loansGiven.reduce((s, l) => s + Number(l.principal), 0),
+              activeCount: loansGiven.filter(l => l.status === 'ACTIVE').length
+            },
+            loansTaken: {
+              total: loansTaken.reduce((s, l) => s + Number(l.principal), 0),
+              activeCount: loansTaken.filter(l => l.status === 'ACTIVE').length
+            },
+            financeSchemes: {
+              total: demoFinanceSchemes.reduce((s, f) => s + Number(f.principal), 0),
+              activeCount: demoFinanceSchemes.filter(s => s.status === 'ACTIVE').length
+            }
+          })
+          setLoans(demoLoans)
+        } else {
+          const [summaryData, loansData] = await Promise.all([
+            getDashboardSummary(),
+            getLoans()
+          ])
+          setSummary(summaryData)
+          setLoans(loansData || [])
+        }
       } catch (error) {
         console.error('Error fetching dashboard data:', error)
       } finally {
@@ -277,7 +312,7 @@ export default function DashboardPage() {
       }
     }
     fetchData()
-  }, [])
+  }, [isDemo])
 
   return (
     <motion.div

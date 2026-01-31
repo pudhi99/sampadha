@@ -35,6 +35,8 @@ import {
     SelectValue,
 } from '@/components/ui/select'
 import { getFinanceSchemes, createFinanceScheme, updateFinanceScheme, deleteFinanceScheme } from '@/lib/db'
+import { useAuth } from '@/context/AuthContext'
+import { demoFinanceSchemes } from '@/lib/demoData'
 
 // Animation variants
 const containerVariants = {
@@ -58,12 +60,13 @@ const itemVariants = {
 // Format currency
 function formatCurrency(amount) {
     const num = Number(amount) || 0
-    if (num >= 100000) {
+    if (num < 100000) {
+        return `₹${num.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
+    } else if (num >= 100000 && num < 10000000) {
         return `₹${(num / 100000).toFixed(2)}L`
-    } else if (num >= 1000) {
-        return `₹${(num / 1000).toFixed(1)}K`
+    } else {
+        return `₹${(num / 10000000).toFixed(2)}Cr`
     }
-    return `₹${num.toLocaleString('en-IN')}`
 }
 
 // Format date
@@ -397,6 +400,7 @@ function EmptyState({ onAdd }) {
 }
 
 export default function FinancePage() {
+    const { isDemo } = useAuth()
     const [schemes, setSchemes] = useState([])
     const [loading, setLoading] = useState(true)
     const [dialogOpen, setDialogOpen] = useState(false)
@@ -404,12 +408,16 @@ export default function FinancePage() {
 
     useEffect(() => {
         fetchSchemes()
-    }, [])
+    }, [isDemo])
 
     const fetchSchemes = async () => {
         try {
-            const data = await getFinanceSchemes()
-            setSchemes(data || [])
+            if (isDemo) {
+                setSchemes(demoFinanceSchemes)
+            } else {
+                const data = await getFinanceSchemes()
+                setSchemes(data || [])
+            }
         } catch (error) {
             console.error('Error fetching schemes:', error)
         } finally {

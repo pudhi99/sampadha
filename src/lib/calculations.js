@@ -216,24 +216,21 @@ export function calculateSchemeReturns(scheme) {
  * @returns {string} Formatted currency string
  */
 export function formatCurrency(amount, showSign = false) {
-    const absAmount = Math.abs(amount)
-    let formatted
+    const num = Number(amount) || 0
+    const sign = showSign ? (num >= 0 ? '+' : '') : ''
 
-    if (absAmount >= 10000000) {
-        formatted = `₹${(absAmount / 10000000).toFixed(2)} Cr`
-    } else if (absAmount >= 100000) {
-        formatted = `₹${(absAmount / 100000).toFixed(2)} L`
-    } else if (absAmount >= 1000) {
-        formatted = `₹${(absAmount / 1000).toFixed(1)}K`
-    } else {
-        formatted = `₹${absAmount.toFixed(0)}`
+    // Show full numbers up to 99,999
+    if (Math.abs(num) < 100000) {
+        return `${sign}₹${num.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
     }
-
-    if (showSign && amount !== 0) {
-        return amount > 0 ? `+${formatted}` : `-${formatted}`
+    // Show in lakhs for 1,00,000 and above
+    else if (Math.abs(num) >= 100000 && Math.abs(num) < 10000000) {
+        return `${sign}₹${(num / 100000).toFixed(2)}L`
     }
-
-    return amount < 0 ? `-${formatted}` : formatted
+    // Show in crores for 1,00,00,000 and above
+    else {
+        return `${sign}₹${(num / 10000000).toFixed(2)}Cr`
+    }
 }
 
 /**
