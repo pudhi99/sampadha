@@ -31,7 +31,8 @@ import {
     Settings,
     Sparkles,
     FileText,
-    Coins
+    Coins,
+    Book
 } from 'lucide-react'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
 import { GlobalSearch } from '@/components/search/GlobalSearch'
@@ -45,6 +46,7 @@ const allNavItems = [
     { href: '/finance', label: 'Private Finance', icon: TrendingUp },
     { href: '/prices', label: 'Price Tracker', icon: Coins },
     { href: '/reports', label: 'Reports', icon: FileText },
+    { href: '/guide', label: 'Guide', icon: Book },
     { href: '/add', label: 'Add New', icon: PlusCircle },
     { href: '/settings', label: 'Settings', icon: Settings },
 ]
@@ -105,6 +107,13 @@ export function Header() {
                                             `}>
                                                 <Icon className="w-5 h-5" />
                                                 <span className="font-medium">{item.label}</span>
+                                                {isActive && (
+                                                    <motion.div
+                                                        className="ml-auto w-2 h-2 rounded-full bg-primary-foreground"
+                                                        layoutId="mobileSheetActiveIndicator"
+                                                        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                                                    />
+                                                )}
                                             </div>
                                         </Link>
                                     )
