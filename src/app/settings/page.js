@@ -223,9 +223,22 @@ function SettingItem({ item }) {
                                 <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
                                     Cancel
                                 </Button>
-                                <Button variant="destructive" onClick={() => {
-                                    alert('This would clear all data. Feature protected for safety.')
-                                    setDeleteDialogOpen(false)
+                                <Button variant="destructive" onClick={async () => {
+                                    try {
+                                        const { supabase } = await import('@/lib/supabase')
+                                        // Delete all data from tables
+                                        await supabase.from('loan_payments').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+                                        await supabase.from('loans').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+                                        await supabase.from('assets').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+                                        await supabase.from('finance_schemes').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+                                        await supabase.from('net_worth_history').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+                                        alert('All data has been deleted successfully.')
+                                        setDeleteDialogOpen(false)
+                                        window.location.reload()
+                                    } catch (error) {
+                                        console.error('Delete failed:', error)
+                                        alert('Failed to delete data: ' + error.message)
+                                    }
                                 }}>
                                     Delete Everything
                                 </Button>

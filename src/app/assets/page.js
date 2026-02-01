@@ -210,6 +210,8 @@ function AssetForm({ asset, onSubmit, onClose }) {
         type: asset?.type || 'CASH',
         current_value: asset?.current_value || '',
         purchase_value: asset?.purchase_value || '',
+        purchase_date: asset?.purchase_date || '',
+        purchase_link: asset?.purchase_link || '',
         notes: asset?.notes || '',
         metadata: asset?.metadata || {},
         category: asset?.category || 'OTHER',
@@ -240,6 +242,8 @@ function AssetForm({ asset, onSubmit, onClose }) {
                 ...formData,
                 current_value: Number(formData.current_value) || 0,
                 purchase_value: Number(formData.purchase_value) || 0,
+                purchase_date: formData.purchase_date || null,
+                purchase_link: formData.purchase_link || null,
                 image_url: imageUrl,
                 category: formData.type === 'PHYSICAL' ? formData.category : null,
                 is_liability: formData.type === 'PHYSICAL' ? formData.is_liability : false,
@@ -487,6 +491,28 @@ function AssetForm({ asset, onSubmit, onClose }) {
                 </div>
             </div>
 
+            <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                    <Label htmlFor="purchase_date">Purchase Date</Label>
+                    <Input
+                        id="purchase_date"
+                        type="date"
+                        value={formData.purchase_date}
+                        onChange={(e) => setFormData({ ...formData, purchase_date: e.target.value })}
+                    />
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="purchase_link">Purchase Link</Label>
+                    <Input
+                        id="purchase_link"
+                        type="url"
+                        placeholder="https://..."
+                        value={formData.purchase_link}
+                        onChange={(e) => setFormData({ ...formData, purchase_link: e.target.value })}
+                    />
+                </div>
+            </div>
+
             <div className="space-y-2">
                 <Label htmlFor="notes">Notes (optional)</Label>
                 <Input
@@ -630,7 +656,7 @@ export default function AssetsPage() {
                             <span className="hidden sm:inline">Add Asset</span>
                         </Button>
                     </DialogTrigger>
-                    <DialogContent className="sm:max-w-md">
+                    <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
                         <DialogHeader>
                             <DialogTitle>{editingAsset ? 'Edit Asset' : 'Add New Asset'}</DialogTitle>
                         </DialogHeader>

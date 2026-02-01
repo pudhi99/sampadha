@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Plus, Receipt, Calendar, Loader2 } from 'lucide-react'
+import { Plus, Receipt, Calendar, Loader2, Trash2 } from 'lucide-react'
 import {
     Dialog,
     DialogContent,
@@ -174,7 +174,7 @@ export function PaymentDialog({ loan, onPaymentAdded, children }) {
 }
 
 // Payment History List
-export function PaymentHistory({ payments, loading }) {
+export function PaymentHistory({ payments, loading, onDelete, isDemo }) {
     if (loading) {
         return (
             <div className="flex items-center justify-center py-8">
@@ -196,6 +196,18 @@ export function PaymentHistory({ payments, loading }) {
         (a, b) => new Date(b.payment_date) - new Date(a.payment_date)
     )
 
+    const handleDelete = async (paymentId) => {
+        if (isDemo) {
+            alert('Cannot delete in demo mode')
+            return
+        }
+        if (confirm('Are you sure you want to delete this payment?')) {
+            if (onDelete) {
+                await onDelete(paymentId)
+            }
+        }
+    }
+
     return (
         <div className="space-y-3">
             {sortedPayments.map((payment, index) => (
@@ -204,7 +216,7 @@ export function PaymentHistory({ payments, loading }) {
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: index * 0.05 }}
-                    className="flex items-center justify-between p-3 rounded-lg bg-background/50"
+                    className="flex items-center justify-between p-3 rounded-lg bg-background/50 group"
                 >
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
@@ -219,17 +231,28 @@ export function PaymentHistory({ payments, loading }) {
                             </p>
                         </div>
                     </div>
-                    <div className="text-right">
-                        <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                            <Calendar className="w-3 h-3" />
-                            {new Date(payment.payment_date).toLocaleDateString('en-IN', {
-                                day: 'numeric',
-                                month: 'short',
-                                year: '2-digit'
-                            })}
+                    <div className="flex items-center gap-2">
+                        <div className="text-right">
+                            <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                                <Calendar className="w-3 h-3" />
+                                {new Date(payment.payment_date).toLocaleDateString('en-IN', {
+                                    day: 'numeric',
+                                    month: 'short',
+                                    year: '2-digit'
+                                })}
+                            </div>
+                            {payment.notes && (
+                                <p className="text-xs text-muted-foreground mt-1">{payment.notes}</p>
+                            )}
                         </div>
-                        {payment.notes && (
-                            <p className="text-xs text-muted-foreground mt-1">{payment.notes}</p>
+                        {!isDemo && (
+                            <button
+                                onClick={() => handleDelete(payment.id)}
+                                className="p-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/20 text-red-500"
+                                title="Delete payment"
+                            >
+                                <Trash2 className="w-4 h-4" />
+                            </button>
                         )}
                     </div>
                 </motion.div>

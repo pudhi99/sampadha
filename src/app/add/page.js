@@ -25,6 +25,7 @@ import {
     SelectValue,
 } from '@/components/ui/select'
 import { createAsset, createLoan, createFinanceScheme } from '@/lib/db'
+import { ImageUpload } from '@/components/assets/ImageUpload'
 
 const entryTypes = [
     {
@@ -119,6 +120,9 @@ function AssetForm({ onSubmit, loading }) {
         type: 'CASH',
         current_value: '',
         purchase_value: '',
+        purchase_date: new Date().toISOString().split('T')[0],
+        purchase_link: '',
+        image_url: '',
         notes: '',
         metadata: {}
     })
@@ -134,6 +138,17 @@ function AssetForm({ onSubmit, loading }) {
                     required
                 />
             </div>
+
+            <ImageUpload
+                value={data.image_url}
+                onChange={(file) => {
+                    // In a real app we would upload the file here and get a URL
+                    // For now we will just use a placeholder or handle it in submit
+                    // Since specific upload logic isn't wired fully, we'll skip direct upload implementation
+                    // and just show the UI for now.
+                    console.log('File selected:', file)
+                }}
+            />
 
             <div className="space-y-2">
                 <Label>Type</Label>
@@ -194,6 +209,26 @@ function AssetForm({ onSubmit, loading }) {
                         value={data.current_value}
                         onChange={(e) => setData({ ...data, current_value: e.target.value })}
                         required
+                    />
+                </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                    <Label>Purchase Date</Label>
+                    <Input
+                        type="date"
+                        value={data.purchase_date}
+                        onChange={(e) => setData({ ...data, purchase_date: e.target.value })}
+                    />
+                </div>
+                <div className="space-y-2">
+                    <Label>Purchase Link (Optional)</Label>
+                    <Input
+                        type="url"
+                        placeholder="https://..."
+                        value={data.purchase_link}
+                        onChange={(e) => setData({ ...data, purchase_link: e.target.value })}
                     />
                 </div>
             </div>

@@ -288,7 +288,16 @@ function LoanCard({ loan, onEdit, onDelete, onPaymentAdded, isDemo }) {
                             >
                                 <div className="mt-4 pt-4 border-t border-border">
                                     <h4 className="text-sm font-semibold mb-3">Payment History</h4>
-                                    <PaymentHistory payments={payments} loading={loadingPayments} />
+                                    <PaymentHistory
+                                        payments={payments}
+                                        loading={loadingPayments}
+                                        isDemo={isDemo}
+                                        onDelete={async (paymentId) => {
+                                            const { deletePayment } = await import('@/lib/db')
+                                            await deletePayment(paymentId)
+                                            loadPayments()
+                                        }}
+                                    />
                                 </div>
                             </motion.div>
                         )}
