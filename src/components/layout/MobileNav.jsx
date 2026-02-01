@@ -9,6 +9,7 @@ import {
     HandCoins,
     BarChart3,
     PlusCircle,
+    Book
 } from 'lucide-react'
 
 const navItems = [
@@ -17,6 +18,7 @@ const navItems = [
     { href: '/add', label: 'Add', icon: PlusCircle, isSpecial: true },
     { href: '/loans/given', label: 'Loans', icon: HandCoins },
     { href: '/reports', label: 'Reports', icon: BarChart3 },
+    { href: '/guide', label: 'Guide', icon: Book },
 ]
 
 export function MobileNav() {
@@ -80,11 +82,12 @@ export function MobileNav() {
                                 <AnimatePresence>
                                     {isActive && (
                                         <motion.div
-                                            className="absolute bottom-1 w-1 h-1 rounded-full bg-primary"
+                                            className="absolute bottom-1 w-1.5 h-1.5 rounded-full bg-primary"
                                             initial={{ scale: 0 }}
                                             animate={{ scale: 1 }}
                                             exit={{ scale: 0 }}
                                             layoutId="mobileActiveIndicator"
+                                            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
                                         />
                                     )}
                                 </AnimatePresence>

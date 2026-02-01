@@ -233,8 +233,6 @@ function AssetCard({ asset, onEdit, onDelete }) {
                                 initial={{ scale: 0.9 }}
                                 whileHover={{ scale: 1 }}
                                 transition={{ duration: 0.5 }}
-                                loading="eager"
-                                crossOrigin="anonymous"
                             />
                         </div>
                     )}
@@ -639,10 +637,15 @@ export default function AssetsPage() {
         }
     }
 
-    // Filter assets by type
-    const filteredAssets = activeTab === 'ALL'
+    // Filter assets by type and sort by newest first (purchase_date or created_at)
+    const filteredAssets = (activeTab === 'ALL'
         ? assets
-        : assets.filter(a => a.type === activeTab)
+        : assets.filter(a => a.type === activeTab))
+        .sort((a, b) => {
+            const dateA = new Date(a.purchase_date || a.created_at)
+            const dateB = new Date(b.purchase_date || b.created_at)
+            return dateB - dateA
+        })
 
     // Calculate totals
     const totalValue = assets.reduce((sum, a) => sum + Number(a.current_value), 0)
