@@ -135,69 +135,115 @@ function AssetCard({ asset, onEdit, onDelete }) {
         ? ((profitLoss / Number(asset.purchase_value)) * 100).toFixed(1)
         : 0
 
+    const isPhysicalWithImage = asset.type === 'PHYSICAL' && asset.image_url
+
     return (
         <motion.div
             variants={itemVariants}
             layout
             whileHover={{ y: -4 }}
-            className="group"
+            className="group h-full"
         >
-            <Card className={`relative overflow-hidden bg-gradient-to-br ${config.color} border-0 floating-card`}>
-                {/* Shimmer on hover */}
-                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 animate-shimmer transition-opacity" />
+            <Card className={`relative overflow-hidden bg-gradient-to-br ${config.color} border-0 floating-card h-full ${isPhysicalWithImage ? 'min-h-[9rem]' : ''}`}>
+                <div className={`flex h-full ${isPhysicalWithImage ? 'flex-row' : 'flex-col'}`}>
 
-                <CardContent className="p-5 relative">
-                    <div className="flex items-start justify-between mb-4">
-                        <motion.div
-                            className={`w-12 h-12 rounded-xl ${config.iconBg} flex items-center justify-center`}
-                            whileHover={{ scale: 1.1, rotate: 5 }}
-                        >
-                            <Icon className={`w-6 h-6 ${config.iconColor}`} />
-                        </motion.div>
+                    {/* Content Section */}
+                    <CardContent className="p-4 relative z-20 flex-1 flex flex-col min-w-0">
+                        <div className="flex items-start justify-between mb-3">
+                            <motion.div
+                                className={`w-12 h-12 rounded-xl ${config.iconBg} flex items-center justify-center backdrop-blur-sm shrink-0`}
+                                whileHover={{ scale: 1.1, rotate: 5 }}
+                            >
+                                <Icon className={`w-6 h-6 ${config.iconColor}`} />
+                            </motion.div>
 
-                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                onClick={() => onEdit(asset)}
-                            >
-                                <Edit className="w-4 h-4" />
-                            </Button>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-destructive hover:text-destructive"
-                                onClick={() => onDelete(asset.id)}
-                            >
-                                <Trash2 className="w-4 h-4" />
-                            </Button>
+                            <div className="flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 hover:bg-background/20"
+                                    onClick={() => onEdit(asset)}
+                                >
+                                    <Edit className="w-4 h-4" />
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-destructive hover:text-destructive hover:bg-red-500/10"
+                                    onClick={() => onDelete(asset.id)}
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                </Button>
+                            </div>
                         </div>
-                    </div>
 
-                    <h3 className="font-semibold text-lg mb-1 truncate">{asset.name}</h3>
+                        <h3 className="font-semibold text-lg mb-1 truncate">{asset.name}</h3>
 
-                    <div className="space-y-2">
-                        <p className="text-2xl font-bold">{formatCurrency(asset.current_value)}</p>
+                        <div className="space-y-1 mb-2">
+                            <p className="text-2xl font-bold">{formatCurrency(asset.current_value)}</p>
 
-                        {asset.type === 'GOLD' && asset.metadata?.grams && (
-                            <p className="text-sm text-muted-foreground">
-                                {asset.metadata.grams}g • {asset.metadata.purity || '22K'}
-                            </p>
+                            {asset.type === 'GOLD' && asset.metadata?.grams && (
+                                <p className="text-sm text-muted-foreground">
+                                    {asset.metadata.grams}g • {asset.metadata.purity || '22K'}
+                                </p>
+                            )}
+
+                            {asset.type === 'PHYSICAL' && asset.category && (
+                                <Badge variant="outline" className="bg-background/50 backdrop-blur-sm border-white/10 w-fit">
+                                    {categoryConfig[asset.category]?.label || asset.category}
+                                </Badge>
+                            )}
+
+                            {profitLoss !== 0 && (
+                                <div className={`flex items-center gap-1 text-sm ${profitLoss >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                                    <span>{profitLoss >= 0 ? '+' : ''}{formatCurrency(Math.abs(profitLoss))}</span>
+                                    <span className="text-muted-foreground">({profitLoss >= 0 ? '+' : ''}{profitPercent}%)</span>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="flex-1" />
+
+                        {asset.notes && (
+                            <p className="text-xs text-muted-foreground mt-2 line-clamp-2">{asset.notes}</p>
                         )}
 
-                        {profitLoss !== 0 && (
-                            <div className={`flex items-center gap-1 text-sm ${profitLoss >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-                                <span>{profitLoss >= 0 ? '+' : ''}{formatCurrency(Math.abs(profitLoss))}</span>
-                                <span className="text-muted-foreground">({profitLoss >= 0 ? '+' : ''}{profitPercent}%)</span>
+                        {asset.purchase_date && (
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground mt-2 border-t border-dashed border-white/10 pt-2">
+                                <span className="opacity-70">Bought:</span>
+                                <span>{new Date(asset.purchase_date).toLocaleDateString()}</span>
                             </div>
                         )}
-                    </div>
+                    </CardContent>
 
-                    {asset.notes && (
-                        <p className="text-xs text-muted-foreground mt-3 line-clamp-2">{asset.notes}</p>
+                    {/* Image Section (Right Side) */}
+                    {isPhysicalWithImage && (
+                        <div className="w-1/2 relative shrink-0 border-l border-white/5 bg-black/10 flex items-center justify-center overflow-hidden">
+                            {/* Blurry Background for fill */}
+                            <div
+                                className="absolute inset-0 opacity-10 bg-cover bg-center blur-xl"
+                                style={{ backgroundImage: `url(${asset.image_url})` }}
+                            />
+
+                            {/* Main Image */}
+                            <motion.img
+                                src={asset.image_url}
+                                alt={asset.name}
+                                className="w-full h-full object-contain p-2 relative z-10"
+                                initial={{ scale: 0.9 }}
+                                whileHover={{ scale: 1 }}
+                                transition={{ duration: 0.5 }}
+                                loading="eager"
+                                crossOrigin="anonymous"
+                            />
+                        </div>
                     )}
-                </CardContent>
+                </div>
+
+                {/* Shimmer on hover (only for non-image cards) */}
+                {!isPhysicalWithImage && (
+                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 animate-shimmer transition-opacity z-10 pointer-events-none" />
+                )}
             </Card>
         </motion.div>
     )

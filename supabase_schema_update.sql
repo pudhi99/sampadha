@@ -36,5 +36,48 @@ CREATE POLICY "Users can update their own notifications"
 ON public.notifications FOR UPDATE 
 USING (auth.uid() = user_id);
 
--- Storage Policies for 'asset-images' bucket (Run this if you can't create via UI)
--- Note: It is often easier to create the bucket 'asset-images' in the dashboard Storage section.
+-- Storage Policies for 'asset-images' bucket
+-- 1. Enable RLS... (skipped)
+-- ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+
+-- 2. FORCE BUCKET TO BE PUBLIC (Fixes 400 Bad Request on getPublicUrl)
+UPDATE storage.buckets SET public = true WHERE id = 'asset-images';
+
+-- 3. Create Policy to allow uploads (INSERT)
+DROP POLICY IF EXISTS "Allow authenticated uploads" ON storage.objects;
+CREATE POLICY "Allow authenticated uploads"
+ON storage.objects FOR INSERT
+TO authenticated
+WITH CHECK (bucket_id = 'asset-images');
+
+-- 3. Create Policy to allow viewing (SELECT)
+DROP POLICY IF EXISTS "Allow public viewing" ON storage.objects;
+CREATE POLICY "Allow public viewing"
+ON storage.objects FOR SELECT
+TO public
+USING (bucket_id = 'asset-images');
+
+-- 4. Create Policy to allow updates/deletes (users can manage own files)
+DROP POLICY IF EXISTS "Allow users to update own files" ON storage.objects;
+CREATE POLICY "Allow users to update own files"
+ON storage.objects FOR UPDATE
+TO authenticated
+USING (bucket_id = 'asset-images' AND owner = auth.uid());
+
+DROP POLICY IF EXISTS "Allow users to delete own files" ON storage.objects;
+CREATE POLICY "Allow users to delete own files"
+ON storage.objects FOR DELETE
+TO authenticated
+USING (bucket_id = 'asset-images' AND owner = auth.uid());
+
+
+-- 5. FIX: Update Assets Type Check Constraint
+-- The error "violates check constraint assets_type_check" implies the DB limits allowed types.
+-- We must update it to include 'PHYSICAL'.
+
+ALTER TABLE public.assets DROP CONSTRAINT IF EXISTS assets_type_check;
+
+ALTER TABLE public.assets 
+ADD CONSTRAINT assets_type_check 
+CHECK (type IN ('CASH', 'GOLD', 'INVESTMENT', 'PHYSICAL'));
+
