@@ -23,7 +23,7 @@ import { saveTodaysPrices } from '@/lib/priceTracking'
 // GoodReturns Widget API
 const WIDGET_API = 'https://www.goodreturns.in/dynamic_html_includes/web/widget/v2_home_page_top_widget.html'
 
-// Parse HTML widget to extract all prices
+// Parse HTML widget to extract all pricess
 function parseWidgetHTML(html) {
     const data = {
         sensex: null,
