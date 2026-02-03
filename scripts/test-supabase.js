@@ -13,6 +13,7 @@ async function testConnection() {
         const supabase = createClient(supabaseUrl, supabaseKey);
 
         // Try to select from a table that should exist, e.g., 'assets' or just check auth
+        // and added the git commits
         const { data, error } = await supabase.from('assets').select('count', { count: 'exact', head: true });
 
         if (error) {
