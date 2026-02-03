@@ -38,7 +38,7 @@ import {
     SelectValue,
 } from '@/components/ui/select'
 import { getAssets, createAsset, updateAsset, deleteAsset } from '@/lib/db'
-import { getCurrentGoldPrice, calculateGoldValue } from '@/lib/goldPrice'
+import { getLatestStoredGoldPrice, calculateGoldValue, getCurrentGoldPrice, getCurrentSilverPrice, getLatestStoredSilverPrice } from '@/lib/goldPrice'
 import { ImageUpload } from '@/components/assets/ImageUpload'
 import { AssetHelpDialog } from '@/components/assets/AssetHelpDialog'
 import { uploadAssetImage } from '@/lib/imageUpload'
@@ -99,6 +99,14 @@ const assetTypeConfig = {
         iconColor: 'text-amber-500',
         glow: 'glow-gold'
     },
+    SILVER: {
+        label: 'Silver',
+        icon: Coins,
+        color: 'from-gray-400/20 to-gray-500/5',
+        iconBg: 'bg-gray-400/20',
+        iconColor: 'text-gray-400',
+        glow: 'glow-silver'
+    },
     INVESTMENT: {
         label: 'Investments',
         icon: TrendingUp,
@@ -127,15 +135,43 @@ const categoryConfig = {
 }
 
 // Asset Card Component
-function AssetCard({ asset, onEdit, onDelete }) {
+function AssetCard({ asset, onEdit, onDelete, marketPrices }) {
     const config = assetTypeConfig[asset.type] || assetTypeConfig.CASH
     const Icon = config.icon
-    const profitLoss = Number(asset.current_value) - Number(asset.purchase_value)
+
+    // Dynamic valuation logic
+    let currentValue = Number(asset.current_value)
+    let isLivePrice = false
+    let livePriceRate = null
+
+    if (asset.type === 'GOLD' && asset.metadata?.grams && marketPrices?.gold) {
+        const purity = asset.metadata.purity || '22K'
+        // If we have a stored price for this purity
+        const rate = marketPrices.gold[purity]
+        if (rate) {
+            currentValue = Math.round(Number(asset.metadata.grams) * rate)
+            isLivePrice = true
+            livePriceRate = rate
+        }
+    } else if (asset.type === 'SILVER' && asset.metadata?.grams && marketPrices?.silver) {
+        const rate = marketPrices.silver.pricePerGram
+        if (rate) {
+            currentValue = Math.round(Number(asset.metadata.grams) * rate)
+            isLivePrice = true
+            livePriceRate = rate
+        }
+    }
+
+    const profitLoss = currentValue - Number(asset.purchase_value)
     const profitPercent = asset.purchase_value > 0
         ? ((profitLoss / Number(asset.purchase_value)) * 100).toFixed(1)
         : 0
 
-    const isPhysicalWithImage = asset.type === 'PHYSICAL' && asset.image_url
+    const isPhysicalWithImage = asset.image_url && (
+        asset.type === 'PHYSICAL' ||
+        asset.type === 'GOLD' ||
+        asset.type === 'SILVER'
+    )
 
     return (
         <motion.div
@@ -180,11 +216,26 @@ function AssetCard({ asset, onEdit, onDelete }) {
                         <h3 className="font-semibold text-lg mb-1 truncate">{asset.name}</h3>
 
                         <div className="space-y-1 mb-2">
-                            <p className="text-2xl font-bold">{formatCurrency(asset.current_value)}</p>
+                            <p className="text-2xl font-bold flex items-center gap-2">
+                                {formatCurrency(currentValue)}
+                                {isLivePrice && (
+                                    <span className="text-[10px] font-normal px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-500 border border-emerald-500/20">
+                                        Live
+                                    </span>
+                                )}
+                            </p>
 
                             {asset.type === 'GOLD' && asset.metadata?.grams && (
                                 <p className="text-sm text-muted-foreground">
                                     {asset.metadata.grams}g • {asset.metadata.purity || '22K'}
+                                    {isLivePrice && ` • ₹${livePriceRate}/g`}
+                                </p>
+                            )}
+
+                            {asset.type === 'SILVER' && asset.metadata?.grams && (
+                                <p className="text-sm text-muted-foreground">
+                                    {asset.metadata.grams}g Silver
+                                    {isLivePrice && ` • ₹${livePriceRate}/g`}
                                 </p>
                             )}
 
@@ -272,13 +323,34 @@ function AssetForm({ asset, onSubmit, onClose }) {
         try {
             let imageUrl = formData.image_url
 
-            // Upload image if a new file was selected
-            if (imageFile && formData.type === 'PHYSICAL') {
+            // Upload image if a new file was selected (for PHYSICAL, GOLD 22K, or SILVER)
+            const shouldUploadImage = imageFile && (
+                formData.type === 'PHYSICAL' ||
+                formData.type === 'SILVER' ||
+                (formData.type === 'GOLD' && formData.metadata.purity === '22K')
+            )
+            if (shouldUploadImage) {
                 try {
                     const result = await uploadAssetImage(imageFile, asset?.id || 'new')
-                    imageUrl = result.url
+                    // Add cache-busting timestamp to prevent stale image display
+                    imageUrl = `${result.url}?t=${Date.now()}`
                 } catch (imgError) {
                     console.error('Image upload failed:', imgError)
+                }
+            }
+
+            // Build metadata based on type
+            let metadata = {}
+            if (formData.type === 'GOLD') {
+                metadata = {
+                    grams: Number(formData.metadata.grams) || 0,
+                    purity: formData.metadata.purity || '22K',
+                    rate_per_gram: Number(formData.metadata.rate_per_gram) || 0
+                }
+            } else if (formData.type === 'SILVER') {
+                metadata = {
+                    grams: Number(formData.metadata.grams) || 0,
+                    rate_per_gram: Number(formData.metadata.rate_per_gram) || 0
                 }
             }
 
@@ -291,11 +363,7 @@ function AssetForm({ asset, onSubmit, onClose }) {
                 image_url: imageUrl,
                 category: formData.type === 'PHYSICAL' ? formData.category : null,
                 is_liability: formData.type === 'PHYSICAL' ? formData.is_liability : false,
-                metadata: formData.type === 'GOLD' ? {
-                    grams: Number(formData.metadata.grams) || 0,
-                    purity: formData.metadata.purity || '22K',
-                    rate_per_gram: Number(formData.metadata.rate_per_gram) || 0
-                } : {}
+                metadata
             })
             onClose()
         } catch (error) {
@@ -330,6 +398,7 @@ function AssetForm({ asset, onSubmit, onClose }) {
                     <SelectContent>
                         <SelectItem value="CASH">Cash & Bank</SelectItem>
                         <SelectItem value="GOLD">Gold</SelectItem>
+                        <SelectItem value="SILVER">Silver</SelectItem>
                         <SelectItem value="INVESTMENT">Investment</SelectItem>
                         <SelectItem value="PHYSICAL">Physical Asset</SelectItem>
                     </SelectContent>
@@ -474,17 +543,21 @@ function AssetForm({ asset, onSubmit, onClose }) {
                                     setFetchingPrice(true)
                                     try {
                                         const goldPrice = await getCurrentGoldPrice()
-                                        const purityNum = formData.metadata.purity === '24K' ? 24 : formData.metadata.purity === '22K' ? 22 : 18
+                                        // Get the price for the selected purity
+                                        const purity = formData.metadata.purity || '22K'
+                                        const pricePerGram = goldPrice[purity] || goldPrice.pricePerGram
+
                                         const currentValue = formData.metadata.grams
-                                            ? calculateGoldValue(Number(formData.metadata.grams), purityNum, goldPrice.pricePerGram)
+                                            ? calculateGoldValue(Number(formData.metadata.grams), purity === '24K' ? 24 : purity === '22K' ? 22 : 18, pricePerGram)
                                             : ''
                                         setFormData({
                                             ...formData,
-                                            metadata: { ...formData.metadata, rate_per_gram: goldPrice.pricePerGram },
+                                            metadata: { ...formData.metadata, rate_per_gram: pricePerGram },
                                             current_value: currentValue
                                         })
                                     } catch (error) {
                                         console.error('Failed to fetch gold price', error)
+                                        alert(error.message)
                                     } finally {
                                         setFetchingPrice(false)
                                     }
@@ -495,7 +568,7 @@ function AssetForm({ asset, onSubmit, onClose }) {
                                 {fetchingPrice ? 'Fetching...' : "Today's Price"}
                             </Button>
                         </div>
-                        <p className="text-xs text-muted-foreground">Current market rate updates automatically</p>
+                        <p className="text-xs text-muted-foreground">Get rate from stored database prices</p>
                     </div>
 
                     {formData.metadata.grams && formData.metadata.rate_per_gram && (
@@ -509,6 +582,113 @@ function AssetForm({ asset, onSubmit, onClose }) {
                             </p>
                         </div>
                     )}
+
+                    {/* Image Upload for 22K Gold (Ornaments) */}
+                    {formData.metadata.purity === '22K' && (
+                        <div className="space-y-2">
+                            <Label>Ornament Photo (optional)</Label>
+                            <ImageUpload
+                                value={formData.image_url}
+                                onChange={(file) => {
+                                    setImageFile(file)
+                                }}
+                                onRemove={() => {
+                                    setImageFile(null)
+                                    setFormData({ ...formData, image_url: '' })
+                                }}
+                            />
+                        </div>
+                    )}
+                </>
+            )}
+
+            {/* Silver Asset Fields */}
+            {formData.type === 'SILVER' && (
+                <>
+                    <div className="space-y-2">
+                        <Label htmlFor="silver_grams">Weight (grams)</Label>
+                        <Input
+                            id="silver_grams"
+                            type="number"
+                            step="0.01"
+                            placeholder="100"
+                            value={formData.metadata.grams || ''}
+                            onChange={(e) => setFormData({
+                                ...formData,
+                                metadata: { ...formData.metadata, grams: e.target.value }
+                            })}
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="silver_rate">Rate per Gram (₹)</Label>
+                        <div className="flex gap-2">
+                            <Input
+                                id="silver_rate"
+                                type="number"
+                                placeholder="85"
+                                value={formData.metadata.rate_per_gram || ''}
+                                onChange={(e) => {
+                                    const rate = e.target.value
+                                    const grams = Number(formData.metadata.grams) || 0
+                                    setFormData({
+                                        ...formData,
+                                        metadata: { ...formData.metadata, rate_per_gram: rate },
+                                        current_value: grams && rate ? Math.round(grams * Number(rate)) : formData.current_value
+                                    })
+                                }}
+                            />
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={async () => {
+                                    setFetchingPrice(true)
+                                    try {
+                                        const silverPrice = await getCurrentSilverPrice()
+                                        const grams = Number(formData.metadata.grams) || 0
+                                        const currentValue = grams ? Math.round(grams * silverPrice.pricePerGram) : ''
+                                        setFormData({
+                                            ...formData,
+                                            metadata: { ...formData.metadata, rate_per_gram: silverPrice.pricePerGram },
+                                            current_value: currentValue
+                                        })
+                                    } catch (error) {
+                                        console.error('Failed to fetch silver price', error)
+                                        alert(error.message)
+                                    } finally {
+                                        setFetchingPrice(false)
+                                    }
+                                }}
+                                disabled={fetchingPrice}
+                                className="whitespace-nowrap"
+                            >
+                                {fetchingPrice ? 'Fetching...' : "Today's Price"}
+                            </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground">Get rate from stored database prices</p>
+                    </div>
+
+                    {formData.metadata.grams && formData.metadata.rate_per_gram && (
+                        <div className="p-3 rounded-lg bg-gray-500/10 border border-gray-500/20">
+                            <p className="text-sm text-gray-400">
+                                Calculated Value: {formatCurrency(Math.round(Number(formData.metadata.grams) * Number(formData.metadata.rate_per_gram)))}
+                            </p>
+                        </div>
+                    )}
+
+                    {/* Image Upload for Silver */}
+                    <div className="space-y-2">
+                        <Label>Photo (optional)</Label>
+                        <ImageUpload
+                            value={formData.image_url}
+                            onChange={(file) => {
+                                setImageFile(file)
+                            }}
+                            onRemove={() => {
+                                setImageFile(null)
+                                setFormData({ ...formData, image_url: '' })
+                            }}
+                        />
+                    </div>
                 </>
             )}
             <div className="grid grid-cols-2 gap-4">
@@ -617,10 +797,28 @@ export default function AssetsPage() {
     const [dialogOpen, setDialogOpen] = useState(false)
     const [editingAsset, setEditingAsset] = useState(null)
 
-    // Fetch assets
+    const [marketPrices, setMarketPrices] = useState(null)
+
+    // Fetch assets and prices
     useEffect(() => {
         fetchAssets()
+        fetchMarketPrices()
     }, [isDemo])
+
+    const fetchMarketPrices = async () => {
+        try {
+            // Even in demo mode, we might want to see real prices if available, 
+            // but let's just default to null if not needed. 
+            // Actually, let's fetch real prices to show the feature.
+            const [gold, silver] = await Promise.all([
+                getLatestStoredGoldPrice(),
+                getLatestStoredSilverPrice()
+            ])
+            setMarketPrices({ gold, silver })
+        } catch (e) {
+            console.error('Error fetching market prices:', e)
+        }
+    }
 
     const fetchAssets = async () => {
         try {
@@ -647,9 +845,9 @@ export default function AssetsPage() {
             return dateB - dateA
         })
 
-    // Calculate totals
-    const totalValue = assets.reduce((sum, a) => sum + Number(a.current_value), 0)
-    const totalPurchase = assets.reduce((sum, a) => sum + Number(a.purchase_value), 0)
+    // Calculate totals based on filtered assets (reflects current tab selection)
+    const totalValue = filteredAssets.reduce((sum, a) => sum + Number(a.current_value), 0)
+    const totalPurchase = filteredAssets.reduce((sum, a) => sum + Number(a.purchase_value), 0)
     const totalProfit = totalValue - totalPurchase
 
     // Handle add/edit
@@ -792,6 +990,7 @@ export default function AssetsPage() {
                                 <AssetCard
                                     key={asset.id}
                                     asset={asset}
+                                    marketPrices={marketPrices}
                                     onEdit={handleEdit}
                                     onDelete={handleDelete}
                                 />

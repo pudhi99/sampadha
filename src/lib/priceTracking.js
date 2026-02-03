@@ -1,114 +1,173 @@
 /**
  * Metals Price Tracking System
- * Tracks gold, silver, and copper prices with historical data
+ * Uses GoodReturns.in for accurate Indian gold/silver prices
+ * Stores only today's prices in database via cron
  */
 
 import { supabase } from './supabase'
 
-// Realistic fallback prices (Indian market)
-const FALLBACK_PRICES = {
-    gold: { pricePerGram: 7250, pricePer10g: 72500 },
-    silver: { pricePerGram: 92, pricePer10g: 920 },
-    copper: { pricePerGram: 0.85, pricePer10g: 8.5 }
-}
-
 /**
- * Fetch current prices for all metals
- * Uses API route with fallback
- * @returns {Promise<Object>} { gold, silver, copper }
+ * Fetch current prices from GoodReturns API
+ * @param {string} city - City for prices (default: mumbai)
+ * @returns {Promise<Object>} { gold, silver } with price data
  */
-export async function fetchAllMetalsPrices() {
+export async function fetchAllMetalsPrices(city = 'mumbai') {
     try {
-        // Try our own API route first (handles fallback internally)
-        const response = await fetch('/api/prices')
+        const baseUrl = typeof window !== 'undefined'
+            ? ''
+            : (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000')
 
-        if (response.ok) {
-            const data = await response.json()
-            if (data.success && data.prices) {
-                return data.prices
+        const response = await fetch(`${baseUrl}/api/prices?city=${city}&timeframe=1M`)
+        const data = await response.json()
+
+        if (!data.success) {
+            console.error('GoodReturns API error:', data.error)
+            return {
+                error: data.error || 'Failed to fetch metal prices',
+                gold: null,
+                silver: null
             }
         }
 
-        // Direct fallback if API route fails
         return {
-            gold: { ...FALLBACK_PRICES.gold, timestamp: new Date().toISOString() },
-            silver: { ...FALLBACK_PRICES.silver, timestamp: new Date().toISOString() },
-            copper: { ...FALLBACK_PRICES.copper, timestamp: new Date().toISOString() }
+            gold: data.prices?.gold || null,
+            silver: data.prices?.silver || null,
+            timestamp: data.timestamp,
+            source: data.source,
+            city: data.city
         }
     } catch (error) {
         console.error('Error fetching metals prices:', error)
-        // Return fallback prices
         return {
-            gold: { ...FALLBACK_PRICES.gold, timestamp: new Date().toISOString() },
-            silver: { ...FALLBACK_PRICES.silver, timestamp: new Date().toISOString() },
-            copper: { ...FALLBACK_PRICES.copper, timestamp: new Date().toISOString() }
+            error: `Technical Issue: ${error.message}`,
+            gold: null,
+            silver: null
         }
     }
 }
 
 /**
- * Save price snapshot to database
- * @param {string} metal - 'GOLD', 'SILVER', or 'COPPER'
- * @param {number} pricePerGram - Price per gram
- * @param {number} pricePer10g - Price per 10 grams
- * @returns {Promise<Object>} Saved record
+ * Save today's price snapshot to database
+ * Only stores today's data, not historical
+ * @param {Object} prices - Price data from API
+ * @returns {Promise<Object>} Save result
  */
-export async function savePriceSnapshot(metal, pricePerGram, pricePer10g) {
+export async function saveTodaysPrices(prices) {
     try {
         const today = new Date().toISOString().split('T')[0]
+        const results = { gold: null, silver: null, errors: [] }
 
-        // Check if snapshot exists for today
-        const { data: existing } = await supabase
-            .from('metals_price_history')
-            .select('*')
-            .eq('metal', metal)
-            .eq('date', today)
-            .single()
+        // Save Gold prices (24K, 22K, 18K)
+        if (prices.gold && prices.gold.pricePerGram) {
+            const goldRecord = {
+                date: today,
+                metal: 'GOLD',
+                price_24k_per_gram: prices.gold['24K']?.pricePerGram || prices.gold.pricePerGram,
+                price_22k_per_gram: prices.gold['22K']?.pricePerGram || null,
+                price_18k_per_gram: prices.gold['18K']?.pricePerGram || null,
+                spot_price_per_gram: null, // Not available from GoodReturns
+                spot_price_per_ounce: null,
+                indian_premium: null,
+                currency: 'INR',
+                source: prices.gold.source || 'goodreturns.in'
+            }
 
-        const snapshot = {
-            metal,
-            date: today,
-            price_per_gram: pricePerGram,
-            price_per_10g: pricePer10g,
-            currency: 'INR'
+            const { data: goldData, error: goldError } = await supabase
+                .from('metals_price_history')
+                .upsert(goldRecord, { onConflict: 'date,metal' })
+                .select()
+                .single()
+
+            if (goldError) {
+                console.error('Error saving gold price:', goldError)
+                results.errors.push(`Gold: ${goldError.message}`)
+            } else {
+                results.gold = goldData
+                console.log('[PriceTracking] Gold price saved:', goldRecord.price_24k_per_gram)
+            }
         }
 
-        if (existing) {
-            // Update existing
-            const { data, error } = await supabase
+        // Save Silver price
+        if (prices.silver && prices.silver.pricePerGram) {
+            const silverRecord = {
+                date: today,
+                metal: 'SILVER',
+                price_24k_per_gram: prices.silver.pricePerGram,
+                price_22k_per_gram: null,
+                price_18k_per_gram: null,
+                spot_price_per_gram: null,
+                spot_price_per_ounce: null,
+                indian_premium: null,
+                currency: 'INR',
+                source: prices.silver.source || 'goodreturns.in'
+            }
+
+            const { data: silverData, error: silverError } = await supabase
                 .from('metals_price_history')
-                .update(snapshot)
-                .eq('metal', metal)
-                .eq('date', today)
+                .upsert(silverRecord, { onConflict: 'date,metal' })
                 .select()
                 .single()
 
-            if (error) throw error
-            return data
-        } else {
-            // Insert new
-            const { data, error } = await supabase
-                .from('metals_price_history')
-                .insert([snapshot])
-                .select()
-                .single()
+            if (silverError) {
+                console.error('Error saving silver price:', silverError)
+                results.errors.push(`Silver: ${silverError.message}`)
+            } else {
+                results.silver = silverData
+                console.log('[PriceTracking] Silver price saved:', silverRecord.price_24k_per_gram)
+            }
+        }
 
-            if (error) throw error
-            return data
+        return {
+            success: results.errors.length === 0,
+            saved: {
+                gold: !!results.gold,
+                silver: !!results.silver
+            },
+            errors: results.errors
         }
     } catch (error) {
-        console.error(`Error saving ${metal} price:`, error)
-        return null
+        console.error('Error saving price snapshot:', error)
+        return { success: false, error: error.message }
     }
 }
 
 /**
- * Get price history for a metal
- * @param {string} metal - 'GOLD', 'SILVER', 'COPPER'
- * @param {number} days - Number of days to retrieve
+ * Get latest price for a metal
+ * @param {string} metal - 'GOLD' or 'SILVER'
+ * @returns {Promise<Object>} Price data
+ */
+export async function getLatestPrice(metal) {
+    try {
+        const prices = await fetchAllMetalsPrices()
+
+        if (prices.error) {
+            return { error: prices.error }
+        }
+
+        const metalLower = metal.toLowerCase()
+        const priceData = prices[metalLower]
+
+        if (!priceData) {
+            return { error: `No price data available for ${metal}` }
+        }
+
+        return {
+            ...priceData,
+            timestamp: prices.timestamp
+        }
+    } catch (error) {
+        console.error(`Error getting latest ${metal} price:`, error)
+        return { error: `Technical Issue: ${error.message}` }
+    }
+}
+
+/**
+ * Get price history from database
+ * @param {string} metal - 'GOLD' or 'SILVER'
+ * @param {number} days - Number of days (default: 7)
  * @returns {Promise<Array>} Price history
  */
-export async function getPriceHistory(metal, days = 30) {
+export async function getPriceHistory(metal, days = 7) {
     try {
         const startDate = new Date()
         startDate.setDate(startDate.getDate() - days)
@@ -121,7 +180,14 @@ export async function getPriceHistory(metal, days = 30) {
             .gte('date', startDateStr)
             .order('date', { ascending: true })
 
-        if (error) throw error
+        if (error) {
+            if (error.code === 'PGRST205') {
+                console.warn('metals_price_history table not found')
+                return []
+            }
+            throw error
+        }
+
         return data || []
     } catch (error) {
         console.error(`Error fetching ${metal} price history:`, error)
@@ -130,37 +196,87 @@ export async function getPriceHistory(metal, days = 30) {
 }
 
 /**
- * Calculate price change comparison
- * @param {string} metal - Metal type
- * @param {string} period - 'day', 'month', 'year'
- * @returns {Promise<Object>} { current, previous, change, changePercent }
+ * Get today's stored price from database
+ * @param {string} metal - 'GOLD' or 'SILVER'
+ * @returns {Promise<Object|null>} Today's price or null
+ */
+export async function getTodaysPrice(metal) {
+    try {
+        const today = new Date().toISOString().split('T')[0]
+
+        const { data, error } = await supabase
+            .from('metals_price_history')
+            .select('*')
+            .eq('metal', metal)
+            .eq('date', today)
+            .single()
+
+        if (error) {
+            if (error.code === 'PGRST116') {
+                return null // No record for today
+            }
+            if (error.code === 'PGRST205') {
+                return null // Table doesn't exist
+            }
+            throw error
+        }
+
+        return data
+    } catch (error) {
+        console.error(`Error getting today's ${metal} price:`, error)
+        return null
+    }
+}
+
+/**
+ * Calculate price change between two dates
+ * @param {string} metal - 'GOLD' or 'SILVER'
+ * @param {string} period - 'day', 'week', 'month'
+ * @returns {Promise<Object>} Change data
  */
 export async function getPriceChange(metal, period = 'day') {
     try {
-        const daysMap = {
-            day: 1,
-            month: 30,
-            year: 365
-        }
+        const daysMap = { day: 1, week: 7, month: 30 }
         const days = daysMap[period] || 1
 
+        // Get current price from API
+        const currentPrice = await getLatestPrice(metal)
+
+        if (currentPrice.error) {
+            return { error: currentPrice.error }
+        }
+
+        // Get historical price from database
         const history = await getPriceHistory(metal, days + 1)
 
-        if (history.length < 2) {
-            // Get current price for display
-            const currentPrice = await getLatestPrice(metal)
+        if (history.length === 0) {
             return {
-                current: currentPrice?.pricePerGram || FALLBACK_PRICES[metal.toLowerCase()]?.pricePerGram || 0,
-                previous: 0,
-                change: 0,
-                changePercent: 0
+                current: currentPrice.pricePerGram,
+                previous: null,
+                change: null,
+                changePercent: null,
+                period,
+                note: 'No historical data available'
             }
         }
 
-        const current = Number(history[history.length - 1]?.price_per_gram || 0)
-        const previous = Number(history[0]?.price_per_gram || 0)
+        const current = currentPrice.pricePerGram || currentPrice['24K']?.pricePerGram
+        const previousRecord = history[0]
+        const previous = Number(previousRecord?.price_24k_per_gram || 0)
+
+        if (previous === 0) {
+            return {
+                current,
+                previous: null,
+                change: null,
+                changePercent: null,
+                period,
+                note: 'Invalid previous price'
+            }
+        }
+
         const change = current - previous
-        const changePercent = previous !== 0 ? ((change / previous) * 100) : 0
+        const changePercent = ((change / previous) * 100)
 
         return {
             current,
@@ -171,76 +287,59 @@ export async function getPriceChange(metal, period = 'day') {
         }
     } catch (error) {
         console.error(`Error calculating ${metal} price change:`, error)
-        return {
-            current: 0,
-            previous: 0,
-            change: 0,
-            changePercent: 0
-        }
+        return { error: `Technical Issue: ${error.message}` }
     }
 }
 
 /**
- * Capture daily price snapshots for all metals
- * @returns {Promise<Object>} Results
+ * Capture and store today's prices via cron
+ * Only fetches and stores if successful
+ * @returns {Promise<Object>} Capture result
  */
 export async function captureDailyPrices() {
     try {
+        console.log('[PriceTracking] Starting daily price capture...')
+
+        // Fetch current prices from GoodReturns
         const prices = await fetchAllMetalsPrices()
-        const results = {
-            gold: null,
-            silver: null,
-            copper: null
+
+        if (prices.error) {
+            console.error('[PriceTracking] API error, not storing:', prices.error)
+            return {
+                success: false,
+                error: prices.error,
+                stored: false
+            }
         }
 
-        if (prices.gold) {
-            results.gold = await savePriceSnapshot('GOLD', prices.gold.pricePerGram, prices.gold.pricePer10g)
-        }
-        if (prices.silver) {
-            results.silver = await savePriceSnapshot('SILVER', prices.silver.pricePerGram, prices.silver.pricePer10g)
-        }
-        if (prices.copper) {
-            results.copper = await savePriceSnapshot('COPPER', prices.copper.pricePerGram, prices.copper.pricePer10g)
+        // Validate we have actual price data
+        if (!prices.gold?.pricePerGram && !prices.silver?.pricePerGram) {
+            console.error('[PriceTracking] No valid prices received, not storing')
+            return {
+                success: false,
+                error: 'No valid prices received from API',
+                stored: false
+            }
         }
 
-        return results
-    } catch (error) {
-        console.error('Error capturing daily prices:', error)
-        return null
-    }
-}
+        // Save to database
+        const saveResult = await saveTodaysPrices(prices)
 
-/**
- * Get latest price for a metal (from history or live)
- * @param {string} metal - Metal type
- * @returns {Promise<Object>} Latest price data
- */
-export async function getLatestPrice(metal) {
-    try {
-        const { data, error } = await supabase
-            .from('metals_price_history')
-            .select('*')
-            .eq('metal', metal)
-            .order('date', { ascending: false })
-            .limit(1)
-            .single()
-
-        if (error || !data) {
-            // Fetch live price if no history
-            const prices = await fetchAllMetalsPrices()
-            const metalLower = metal.toLowerCase()
-            return prices[metalLower] || FALLBACK_PRICES[metalLower] || null
-        }
+        console.log('[PriceTracking] Daily capture complete:', saveResult)
 
         return {
-            pricePerGram: Number(data.price_per_gram),
-            pricePer10g: Number(data.price_per_10g),
-            date: data.date
+            success: saveResult.success,
+            gold: prices.gold,
+            silver: prices.silver,
+            stored: saveResult.saved,
+            errors: saveResult.errors
         }
     } catch (error) {
-        console.error(`Error getting latest ${metal} price:`, error)
-        // Return fallback
-        const metalLower = metal.toLowerCase()
-        return FALLBACK_PRICES[metalLower] || null
+        console.error('[PriceTracking] Daily capture failed:', error)
+        return {
+            success: false,
+            error: `Technical Issue: ${error.message}`,
+            stored: false
+        }
     }
 }
