@@ -3,6 +3,7 @@ const { createClient } = require('@supabase/supabase-js');
 
 const supabaseUrl = 'https://cqurahndhvcmvrvqhsfq.supabase.co';
 const supabaseKey = 'sb_publishable_pw0CppTAkb17emYpobA4XA_gkhmdEwn';
+const supabaseKey2 = 'sb_publishable_pw0CppTAkb17emYpobA4XA_gkhmdEwn'; //for testing addded
 
 async function testConnection() {
     console.log('Testing Supabase Connection...');
