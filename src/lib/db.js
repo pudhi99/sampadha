@@ -209,6 +209,39 @@ export async function deleteFinanceScheme(id) {
     return true
 }
 
+
+export async function getFinancePayments(schemeId) {
+    const { data, error } = await supabase
+        .from('finance_payments')
+        .select('*')
+        .eq('scheme_id', schemeId)
+        .order('payment_date', { ascending: false })
+
+    if (error) throw error
+    return data
+}
+
+export async function addFinancePayment(payment) {
+    const { data, error } = await supabase
+        .from('finance_payments')
+        .insert([payment])
+        .select()
+        .single()
+
+    if (error) throw error
+    return data
+}
+
+export async function deleteFinancePayment(id) {
+    const { error } = await supabase
+        .from('finance_payments')
+        .delete()
+        .eq('id', id)
+
+    if (error) throw error
+    return true
+}
+
 // ============ DASHBOARD / SUMMARY ============
 
 export async function getDashboardSummary() {

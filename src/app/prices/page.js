@@ -13,12 +13,23 @@ import {
     Coins,
     DollarSign,
     BarChart3,
-    Droplets
+    Droplets,
+    LineChart as LineChartIcon
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { saveTodaysPrices } from '@/lib/priceTracking'
+import { saveTodaysPrices, getPriceHistory } from '@/lib/priceTracking'
+import {
+    LineChart,
+    Line,
+    XAxis,
+    YAxis,
+    CartesianGrid,
+    Tooltip,
+    ResponsiveContainer,
+    Legend
+} from 'recharts'
 
 // GoodReturns Widget API
 const WIDGET_API = 'https://www.goodreturns.in/dynamic_html_includes/web/widget/v2_home_page_top_widget.html'
@@ -203,12 +214,179 @@ function KaratPriceRow({ karat, price, description, highlight }) {
     )
 }
 
+// Price History Chart Component
+function PriceHistoryChart({ goldHistory, silverHistory, loading }) {
+    if (loading) {
+        return (
+            <Card className="border-0 bg-card/50">
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <LineChartIcon className="w-5 h-5" />
+                        Price History
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div className="h-64 rounded bg-muted/50 animate-pulse" />
+                </CardContent>
+            </Card>
+        )
+    }
+
+    // Transform data for chart
+    const chartData = []
+    const allDates = new Set()
+
+    goldHistory.forEach(g => allDates.add(g.date))
+    silverHistory.forEach(s => allDates.add(s.date))
+
+    Array.from(allDates).sort().forEach(date => {
+        const goldRecord = goldHistory.find(g => g.date === date)
+        const silverRecord = silverHistory.find(s => s.date === date)
+        chartData.push({
+            date: new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }),
+            gold24k: goldRecord?.price_24k_per_gram || null,
+            gold22k: goldRecord?.price_22k_per_gram || null,
+            silver: silverRecord?.price_24k_per_gram || null // Silver uses this field
+        })
+    })
+
+    if (chartData.length === 0) {
+        return (
+            <Card className="border-0 bg-card/50">
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <LineChartIcon className="w-5 h-5" />
+                        Price History
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div className="text-center py-8 text-muted-foreground">
+                        <p>No historical data yet.</p>
+                        <p className="text-sm">Click "Store Today" daily to build your price history.</p>
+                    </div>
+                </CardContent>
+            </Card>
+        )
+    }
+
+    return (
+        <Card className="border-0 bg-card/50">
+            <CardHeader>
+                <div className="flex items-center justify-between">
+                    <CardTitle className="flex items-center gap-2">
+                        <LineChartIcon className="w-5 h-5" />
+                        Price History (Last 30 Days)
+                    </CardTitle>
+                    <Badge variant="outline">{chartData.length} days</Badge>
+                </div>
+            </CardHeader>
+            <CardContent>
+                <div className="space-y-6">
+                    {/* Gold Chart */}
+                    <div>
+                        <h4 className="text-sm font-medium text-amber-500 mb-2 flex items-center gap-2">
+                            <span className="text-lg">🥇</span> Gold Prices (₹/gram)
+                        </h4>
+                        <div className="h-48">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <LineChart data={chartData}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+                                    <XAxis
+                                        dataKey="date"
+                                        stroke="#888"
+                                        tick={{ fontSize: 10 }}
+                                        interval="preserveStartEnd"
+                                    />
+                                    <YAxis
+                                        stroke="#888"
+                                        tick={{ fontSize: 10 }}
+                                        domain={['auto', 'auto']}
+                                        tickFormatter={(v) => `₹${(v / 1000).toFixed(1)}k`}
+                                    />
+                                    <Tooltip
+                                        contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid #333' }}
+                                        formatter={(value) => [`₹${value?.toLocaleString('en-IN')}`, '']}
+                                    />
+                                    <Legend />
+                                    <Line
+                                        type="monotone"
+                                        dataKey="gold24k"
+                                        name="24K"
+                                        stroke="#f59e0b"
+                                        strokeWidth={2}
+                                        dot={{ fill: '#f59e0b', r: 3 }}
+                                        activeDot={{ r: 5 }}
+                                        connectNulls
+                                    />
+                                    <Line
+                                        type="monotone"
+                                        dataKey="gold22k"
+                                        name="22K"
+                                        stroke="#d97706"
+                                        strokeWidth={2}
+                                        dot={{ fill: '#d97706', r: 3 }}
+                                        activeDot={{ r: 5 }}
+                                        connectNulls
+                                    />
+                                </LineChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+
+                    {/* Silver Chart */}
+                    <div>
+                        <h4 className="text-sm font-medium text-gray-400 mb-2 flex items-center gap-2">
+                            <span className="text-lg">🥈</span> Silver Price (₹/gram)
+                        </h4>
+                        <div className="h-48">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <LineChart data={chartData}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+                                    <XAxis
+                                        dataKey="date"
+                                        stroke="#888"
+                                        tick={{ fontSize: 10 }}
+                                        interval="preserveStartEnd"
+                                    />
+                                    <YAxis
+                                        stroke="#888"
+                                        tick={{ fontSize: 10 }}
+                                        domain={['auto', 'auto']}
+                                        tickFormatter={(v) => `₹${v}`}
+                                    />
+                                    <Tooltip
+                                        contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid #333' }}
+                                        formatter={(value) => [`₹${value?.toLocaleString('en-IN')}`, 'Silver']}
+                                    />
+                                    <Line
+                                        type="monotone"
+                                        dataKey="silver"
+                                        name="Silver"
+                                        stroke="#9ca3af"
+                                        strokeWidth={2}
+                                        dot={{ fill: '#9ca3af', r: 3 }}
+                                        activeDot={{ r: 5 }}
+                                        connectNulls
+                                    />
+                                </LineChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+                </div>
+            </CardContent>
+        </Card>
+    )
+}
+
 export default function PriceTrackerPage() {
     const [widgetData, setWidgetData] = useState(null)
     const [loading, setLoading] = useState(true)
     const [refreshing, setRefreshing] = useState(false)
     const [error, setError] = useState(null)
     const [lastUpdated, setLastUpdated] = useState(null)
+    const [goldHistory, setGoldHistory] = useState([])
+    const [silverHistory, setSilverHistory] = useState([])
+    const [historyLoading, setHistoryLoading] = useState(true)
 
     // Fetch directly from GoodReturns (client-side)
     const fetchPrices = async () => {
@@ -264,6 +442,7 @@ export default function PriceTrackerPage() {
             })
             if (result.success) {
                 alert('✅ Prices stored successfully!')
+                fetchPriceHistory() // Refresh chart
             } else {
                 alert(`Failed: ${result.errors?.join(', ') || result.error}`)
             }
@@ -273,8 +452,25 @@ export default function PriceTrackerPage() {
         setRefreshing(false)
     }
 
+    // Fetch price history
+    const fetchPriceHistory = async () => {
+        setHistoryLoading(true)
+        try {
+            const [goldData, silverData] = await Promise.all([
+                getPriceHistory('GOLD', 30),
+                getPriceHistory('SILVER', 30)
+            ])
+            setGoldHistory(goldData)
+            setSilverHistory(silverData)
+        } catch (err) {
+            console.error('Error fetching price history:', err)
+        }
+        setHistoryLoading(false)
+    }
+
     useEffect(() => {
         fetchPrices()
+        fetchPriceHistory()
     }, [])
 
     return (
@@ -436,6 +632,13 @@ export default function PriceTrackerPage() {
                     </Card>
                 </div>
             </div>
+
+            {/* Price History Chart */}
+            <PriceHistoryChart
+                goldHistory={goldHistory}
+                silverHistory={silverHistory}
+                loading={historyLoading}
+            />
 
 
 

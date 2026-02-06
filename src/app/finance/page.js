@@ -13,7 +13,16 @@ import {
     CheckCircle2,
     Clock,
     XCircle,
-    Zap
+    Zap,
+    Building2,
+    Users,
+    Landmark,
+    Coins,
+    PiggyBank,
+    ArrowUpRight,
+    IndianRupee,
+    RefreshCw,
+    Filter
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -27,6 +36,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import {
     Select,
     SelectContent,
@@ -34,7 +44,8 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select'
-import { getFinanceSchemes, createFinanceScheme, updateFinanceScheme, deleteFinanceScheme } from '@/lib/db'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { getFinanceSchemes, createFinanceScheme, updateFinanceScheme, deleteFinanceScheme, getFinancePayments, addFinancePayment, deleteFinancePayment } from '@/lib/db'
 import { useAuth } from '@/context/AuthContext'
 import { demoFinanceSchemes } from '@/lib/demoData'
 
@@ -55,6 +66,92 @@ const itemVariants = {
         scale: 1,
         transition: { type: 'spring', stiffness: 100, damping: 15 }
     }
+}
+
+// Investment Scheme Types Configuration
+const SCHEME_TYPES = {
+    PRIVATE_FINANCE: {
+        label: 'Private Finance',
+        icon: Zap,
+        color: 'violet',
+        gradient: 'from-violet-500/10 to-violet-600/5',
+        description: 'High-yield private lending schemes'
+    },
+    CHIT_FUND: {
+        label: 'Chit Fund',
+        icon: Users,
+        color: 'blue',
+        gradient: 'from-blue-500/10 to-blue-600/5',
+        description: 'Traditional rotating savings group'
+    },
+    POST_OFFICE_FD: {
+        label: 'Post Office FD',
+        icon: Building2,
+        color: 'emerald',
+        gradient: 'from-emerald-500/10 to-emerald-600/5',
+        description: 'Fixed Deposit with guaranteed returns'
+    },
+    POST_OFFICE_RD: {
+        label: 'Post Office RD',
+        icon: PiggyBank,
+        color: 'teal',
+        gradient: 'from-teal-500/10 to-teal-600/5',
+        description: 'Monthly recurring deposit scheme'
+    },
+    NSC: {
+        label: 'NSC',
+        icon: Landmark,
+        color: 'orange',
+        gradient: 'from-orange-500/10 to-orange-600/5',
+        description: 'National Savings Certificate'
+    },
+    KVP: {
+        label: 'KVP',
+        icon: Coins,
+        color: 'amber',
+        gradient: 'from-amber-500/10 to-amber-600/5',
+        description: 'Kisan Vikas Patra - doubles in 115 months'
+    },
+    PPF: {
+        label: 'PPF',
+        icon: TrendingUp,
+        color: 'green',
+        gradient: 'from-green-500/10 to-green-600/5',
+        description: 'Public Provident Fund - 15 year scheme'
+    },
+    SCSS: {
+        label: 'SCSS',
+        icon: Building2,
+        color: 'rose',
+        gradient: 'from-rose-500/10 to-rose-600/5',
+        description: 'Senior Citizen Savings Scheme'
+    }
+}
+
+// Current Interest Rates (as of Q4 FY 2024-25)
+const INTEREST_RATES = {
+    POST_OFFICE_FD: { '1Y': 6.9, '2Y': 7.0, '3Y': 7.1, '5Y': 7.5 },
+    POST_OFFICE_RD: 6.7,
+    NSC: 7.7,
+    KVP: 7.5,
+    PPF: 7.1,
+    SCSS: 8.2
+}
+
+// Risk level config
+const riskConfig = {
+    LOW: { label: 'Low Risk', color: 'bg-emerald-500/20 text-emerald-500 border-emerald-500/30' },
+    MEDIUM: { label: 'Medium Risk', color: 'bg-amber-500/20 text-amber-500 border-amber-500/30' },
+    HIGH: { label: 'High Risk', color: 'bg-red-500/20 text-red-500 border-red-500/30' }
+}
+
+// Status config
+const statusConfig = {
+    ACTIVE: { label: 'Active', icon: CheckCircle2, color: 'text-emerald-500' },
+    DELAYED: { label: 'Delayed', icon: Clock, color: 'text-amber-500' },
+    CLOSED: { label: 'Closed', icon: CheckCircle2, color: 'text-muted-foreground' },
+    MATURED: { label: 'Matured', icon: CheckCircle2, color: 'text-blue-500' },
+    DEFAULTED: { label: 'Defaulted', icon: XCircle, color: 'text-red-500' }
 }
 
 // Format currency
@@ -79,43 +176,201 @@ function formatDate(dateStr) {
     })
 }
 
-// Risk level config
-const riskConfig = {
-    LOW: { label: 'Low Risk', color: 'bg-emerald-500/20 text-emerald-500 border-emerald-500/30' },
-    MEDIUM: { label: 'Medium Risk', color: 'bg-amber-500/20 text-amber-500 border-amber-500/30' },
-    HIGH: { label: 'High Risk', color: 'bg-red-500/20 text-red-500 border-red-500/30' }
-}
-
-// Status config
-const statusConfig = {
-    ACTIVE: { label: 'Active', icon: CheckCircle2, color: 'text-emerald-500' },
-    DELAYED: { label: 'Delayed', icon: Clock, color: 'text-amber-500' },
-    CLOSED: { label: 'Closed', icon: CheckCircle2, color: 'text-muted-foreground' },
-    DEFAULTED: { label: 'Defaulted', icon: XCircle, color: 'text-red-500' }
-}
-
-// Calculate expected returns
-function calculateExpectedReturns(principal, rate, startDate, cycle) {
-    const p = Number(principal) || 0
-    const r = Number(rate) / 100 || 0
-    const start = new Date(startDate)
+// Calculate expected returns based on scheme type
+function calculateExpectedReturns(scheme) {
+    const principal = Number(scheme.principal) || 0
+    const rate = Number(scheme.interest_rate) / 100 || 0
+    const startDate = new Date(scheme.start_date)
     const today = new Date()
-    const years = (today - start) / (1000 * 60 * 60 * 24 * 365)
+    const years = Math.max(0, (today - startDate) / (1000 * 60 * 60 * 24 * 365))
 
-    return p * r * years
+    switch (scheme.scheme_type) {
+        case 'CHIT_FUND': {
+            // Chit fund: Calculate based on completed installments
+            const monthlyAmount = Number(scheme.monthly_amount) || 0
+            const totalMonths = Number(scheme.duration_months) || 20
+            const completedMonths = Math.min(totalMonths, Math.floor((today - startDate) / (1000 * 60 * 60 * 24 * 30)))
+            const totalPaid = monthlyAmount * completedMonths
+            const chitValue = Number(scheme.chit_value) || (monthlyAmount * totalMonths)
+            const commission = (Number(scheme.commission_percent) || 4) / 100
+
+            // If won, calculate based on when won
+            if (scheme.won_at_month) {
+                const wonAmount = chitValue * (1 - commission)
+                return wonAmount - (monthlyAmount * scheme.won_at_month)
+            }
+            return totalPaid * 0.02 // Estimate 2% dividend till bidding
+        }
+        case 'POST_OFFICE_RD': {
+            // RD: Quarterly compounding
+            const monthly = Number(scheme.monthly_amount) || 0
+            const months = Math.floor((today - startDate) / (1000 * 60 * 60 * 24 * 30))
+            const deposited = monthly * months
+            const maturityMonths = 60 // 5 years
+            const r = rate / 4 // Quarterly rate
+            const maturityValue = monthly * (((1 + r) ** (maturityMonths / 3) - 1) / r) * (1 + r)
+            const currentValue = deposited * (1 + (rate * months / 12 / 2))
+            return currentValue - deposited
+        }
+        case 'KVP': {
+            // KVP: Doubles in 115 months
+            const months = Math.floor((today - startDate) / (1000 * 60 * 60 * 24 * 30))
+            const maturityMonths = 115
+            const progress = Math.min(1, months / maturityMonths)
+            return principal * progress // Compound interest approximation
+        }
+        case 'PPF': {
+            // PPF: 15 year with annual compounding
+            const yearlyDeposit = Number(scheme.yearly_deposit) || principal / 15
+            const completedYears = Math.floor(years)
+            let balance = 0
+            for (let i = 0; i < completedYears; i++) {
+                balance = (balance + yearlyDeposit) * (1 + rate)
+            }
+            const totalDeposited = yearlyDeposit * completedYears
+            return balance - totalDeposited
+        }
+        default:
+            // Simple interest for FD, NSC, Private Finance
+            return principal * rate * years
+    }
+}
+
+// Calculate maturity date
+function getMaturityDate(scheme) {
+    const start = new Date(scheme.start_date)
+    const type = scheme.scheme_type
+
+    switch (type) {
+        case 'POST_OFFICE_FD':
+            const fdYears = parseInt(scheme.tenure) || 1
+            return new Date(start.setFullYear(start.getFullYear() + fdYears))
+        case 'POST_OFFICE_RD':
+            return new Date(start.setFullYear(start.getFullYear() + 5))
+        case 'NSC':
+            return new Date(start.setFullYear(start.getFullYear() + 5))
+        case 'KVP':
+            return new Date(start.setMonth(start.getMonth() + 115))
+        case 'PPF':
+            return new Date(start.setFullYear(start.getFullYear() + 15))
+        case 'SCSS':
+            return new Date(start.setFullYear(start.getFullYear() + 5))
+        case 'CHIT_FUND':
+            const months = Number(scheme.duration_months) || 20
+            return new Date(start.setMonth(start.getMonth() + months))
+        default:
+            return scheme.end_date ? new Date(scheme.end_date) : null
+    }
 }
 
 // Scheme Card Component
-function SchemeCard({ scheme, onEdit, onDelete }) {
+function SchemeCard({ scheme, onEdit, onDelete, onViewHistory }) {
+    const schemeType = SCHEME_TYPES[scheme.scheme_type] || SCHEME_TYPES.PRIVATE_FINANCE
+    const TypeIcon = schemeType.icon
     const risk = riskConfig[scheme.risk_level] || riskConfig.MEDIUM
     const status = statusConfig[scheme.status] || statusConfig.ACTIVE
     const StatusIcon = status.icon
-    const expectedReturns = calculateExpectedReturns(
-        scheme.principal,
-        scheme.interest_rate,
-        scheme.start_date,
-        scheme.payment_cycle
-    )
+    const expectedReturns = calculateExpectedReturns(scheme)
+    const maturityDate = getMaturityDate(scheme)
+
+    const getTypeSpecificInfo = () => {
+        switch (scheme.scheme_type) {
+            case 'CHIT_FUND':
+                // Calculate variable installments
+                const chitValue = Number(scheme.chit_value) || 0
+                const durationMonths = Number(scheme.duration_months) || 20
+                const baseInstallment = chitValue / durationMonths
+                const firstBonus = Math.round(baseInstallment * 0.27)
+                const firstMonthPayment = Math.round(baseInstallment - firstBonus)
+                const lastMonthPayment = Math.round(baseInstallment)
+                const currentMonth = scheme.current_month || Math.floor((new Date() - new Date(scheme.start_date)) / (1000 * 60 * 60 * 24 * 30))
+
+                return (
+                    <>
+                        <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground">Chit Value</span>
+                            <span className="font-medium">{formatCurrency(chitValue)}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground">Installment Range</span>
+                            <span className="font-medium text-sm">
+                                ₹{firstMonthPayment.toLocaleString('en-IN')} → ₹{lastMonthPayment.toLocaleString('en-IN')}
+                            </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground">Progress</span>
+                            <span className="font-medium">
+                                {Math.min(currentMonth, durationMonths)}/{durationMonths} months
+                            </span>
+                        </div>
+                        {scheme.won_at_month && (
+                            <div className="flex items-center justify-between text-emerald-500">
+                                <span>Won at</span>
+                                <span className="font-medium">Month {scheme.won_at_month}</span>
+                            </div>
+                        )}
+                    </>
+                )
+            case 'POST_OFFICE_RD':
+                return (
+                    <>
+                        <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground">Monthly</span>
+                            <span className="font-medium">{formatCurrency(scheme.monthly_amount)}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground">Interest</span>
+                            <span className="font-medium">{scheme.interest_rate}% p.a.</span>
+                        </div>
+                    </>
+                )
+            case 'PPF':
+                return (
+                    <>
+                        <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground">Yearly Deposit</span>
+                            <span className="font-medium">{formatCurrency(scheme.yearly_deposit || scheme.principal)}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground">Interest</span>
+                            <span className="font-medium">{scheme.interest_rate}% p.a.</span>
+                        </div>
+                    </>
+                )
+            case 'POST_OFFICE_FD':
+                return (
+                    <>
+                        <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground">Tenure</span>
+                            <span className="font-medium">{scheme.tenure} Year{scheme.tenure > 1 ? 's' : ''}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground">Interest</span>
+                            <span className="font-medium">{scheme.interest_rate}% p.a.</span>
+                        </div>
+                    </>
+                )
+            default:
+                return (
+                    <>
+                        <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground flex items-center gap-2">
+                                <Percent className="w-4 h-4" />
+                                Interest
+                            </span>
+                            <span className="font-medium">{scheme.interest_rate}% / year</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground flex items-center gap-2">
+                                <Calendar className="w-4 h-4" />
+                                Payout
+                            </span>
+                            <span className="font-medium">{scheme.payment_cycle}</span>
+                        </div>
+                    </>
+                )
+        }
+    }
 
     return (
         <motion.div
@@ -124,7 +379,7 @@ function SchemeCard({ scheme, onEdit, onDelete }) {
             whileHover={{ y: -4 }}
             className="group"
         >
-            <Card className="relative overflow-hidden bg-gradient-to-br from-violet-500/10 to-violet-600/5 border-0 floating-card">
+            <Card className={`relative overflow-hidden bg-gradient-to-br ${schemeType.gradient} border-0 floating-card`}>
                 <div className="absolute inset-0 opacity-0 group-hover:opacity-100 animate-shimmer transition-opacity" />
 
                 <CardContent className="p-5 relative">
@@ -132,22 +387,38 @@ function SchemeCard({ scheme, onEdit, onDelete }) {
                     <div className="flex items-start justify-between mb-4">
                         <div className="flex items-center gap-3">
                             <motion.div
-                                className="w-12 h-12 rounded-xl bg-violet-500/20 flex items-center justify-center"
+                                className={`w-12 h-12 rounded-xl bg-${schemeType.color}-500/20 flex items-center justify-center`}
                                 whileHover={{ scale: 1.1, rotate: 5 }}
                             >
-                                <Zap className="w-6 h-6 text-violet-500" />
+                                <TypeIcon className={`w-6 h-6 text-${schemeType.color}-500`} />
                             </motion.div>
                             <div>
-                                <h3 className="font-semibold text-lg">{scheme.name}</h3>
-                                <div className="flex gap-2 mt-1">
-                                    <Badge variant="outline" className={`${risk.color} text-xs`}>
-                                        {risk.label}
+                                <h3 className="font-semibold text-lg line-clamp-1">{scheme.name}</h3>
+                                <div className="flex gap-2 mt-1 flex-wrap">
+                                    <Badge variant="outline" className="text-xs bg-background/50">
+                                        {schemeType.label}
                                     </Badge>
+                                    {scheme.scheme_type === 'PRIVATE_FINANCE' && (
+                                        <Badge variant="outline" className={`${risk.color} text-xs`}>
+                                            {risk.label}
+                                        </Badge>
+                                    )}
                                 </div>
                             </div>
                         </div>
 
                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {['CHIT_FUND', 'PRIVATE_FINANCE', 'POST_OFFICE_RD'].includes(scheme.scheme_type) && (
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-blue-500 hover:text-blue-600 hover:bg-blue-500/10"
+                                    onClick={() => onViewHistory && onViewHistory(scheme)}
+                                    title="Payment History"
+                                >
+                                    <Clock className="w-4 h-4" />
+                                </Button>
+                            )}
                             <Button
                                 variant="ghost"
                                 size="icon"
@@ -179,22 +450,10 @@ function SchemeCard({ scheme, onEdit, onDelete }) {
                         </div>
                     </div>
 
-                    {/* Details */}
+                    {/* Type-specific Details */}
                     <div className="space-y-2 text-sm">
-                        <div className="flex items-center justify-between">
-                            <span className="text-muted-foreground flex items-center gap-2">
-                                <Percent className="w-4 h-4" />
-                                Interest
-                            </span>
-                            <span className="font-medium">{scheme.interest_rate}% / year</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                            <span className="text-muted-foreground flex items-center gap-2">
-                                <Calendar className="w-4 h-4" />
-                                Payout
-                            </span>
-                            <span className="font-medium">{scheme.payment_cycle}</span>
-                        </div>
+                        {getTypeSpecificInfo()}
+
                         <div className="flex items-center justify-between">
                             <span className="text-muted-foreground">Status</span>
                             <span className={`font-medium flex items-center gap-1 ${status.color}`}>
@@ -202,6 +461,13 @@ function SchemeCard({ scheme, onEdit, onDelete }) {
                                 {status.label}
                             </span>
                         </div>
+
+                        {maturityDate && (
+                            <div className="flex items-center justify-between">
+                                <span className="text-muted-foreground">Matures</span>
+                                <span className="font-medium">{formatDate(maturityDate)}</span>
+                            </div>
+                        )}
                     </div>
 
                     {scheme.notes && (
@@ -215,29 +481,125 @@ function SchemeCard({ scheme, onEdit, onDelete }) {
     )
 }
 
-// Scheme Form Component
+// Dynamic Form Component based on Scheme Type
 function SchemeForm({ scheme, onSubmit, onClose }) {
+    const [schemeType, setSchemeType] = useState(scheme?.scheme_type || 'PRIVATE_FINANCE')
     const [formData, setFormData] = useState({
         name: scheme?.name || '',
+        scheme_type: scheme?.scheme_type || 'PRIVATE_FINANCE',
         principal: scheme?.principal || '',
-        interest_rate: scheme?.interest_rate || '18',
+        interest_rate: scheme?.interest_rate || '',
         payment_cycle: scheme?.payment_cycle || 'MONTHLY',
         risk_level: scheme?.risk_level || 'MEDIUM',
         status: scheme?.status || 'ACTIVE',
         start_date: scheme?.start_date || new Date().toISOString().split('T')[0],
-        notes: scheme?.notes || ''
+        notes: scheme?.notes || '',
+        // Chit fund specific
+        chit_value: scheme?.chit_value || '',
+        duration_months: scheme?.duration_months || '20',
+        commission_percent: scheme?.commission_percent || '4',
+        won_at_month: scheme?.won_at_month || '',
+        current_month: scheme?.current_month || '1',
+        // FD specific
+        tenure: scheme?.tenure || '1',
+        // PPF specific
+        yearly_deposit: scheme?.yearly_deposit || '',
+        // Account details
+        account_number: scheme?.account_number || '',
+        branch: scheme?.branch || ''
     })
     const [loading, setLoading] = useState(false)
+
+    // Auto-set interest rate based on scheme type
+    useEffect(() => {
+        if (!scheme) { // Only for new schemes
+            const rates = INTEREST_RATES[schemeType]
+            if (rates) {
+                if (typeof rates === 'object') {
+                    // FD has tenure-based rates
+                    setFormData(prev => ({
+                        ...prev,
+                        interest_rate: rates[`${prev.tenure}Y`] || rates['1Y']
+                    }))
+                } else {
+                    setFormData(prev => ({ ...prev, interest_rate: rates }))
+                }
+            }
+        }
+    }, [schemeType, formData.tenure])
+
+    const handleSchemeTypeChange = (type) => {
+        setSchemeType(type)
+        setFormData(prev => ({
+            ...prev,
+            scheme_type: type,
+            risk_level: type === 'PRIVATE_FINANCE' ? 'HIGH' :
+                type === 'CHIT_FUND' ? 'MEDIUM' : 'LOW'
+        }))
+    }
 
     const handleSubmit = async (e) => {
         e.preventDefault()
         setLoading(true)
         try {
-            await onSubmit({
-                ...formData,
+            // Build submission data based on type
+            const submitData = {
+                name: formData.name,
+                scheme_type: schemeType,
                 principal: Number(formData.principal) || 0,
-                interest_rate: Number(formData.interest_rate) || 0
-            })
+                interest_rate: Number(formData.interest_rate) || 0,
+                status: formData.status,
+                start_date: formData.start_date,
+                notes: formData.notes,
+                risk_level: formData.risk_level
+            }
+
+            // Add type-specific fields
+            switch (schemeType) {
+                case 'CHIT_FUND':
+                    submitData.chit_value = Number(formData.chit_value) || 0
+                    submitData.duration_months = Number(formData.duration_months) || 20
+                    submitData.commission_percent = Number(formData.commission_percent) || 4
+                    submitData.won_at_month = formData.won_at_month ? Number(formData.won_at_month) : null
+                    submitData.current_month = Number(formData.current_month) || 1
+                    submitData.principal = submitData.chit_value // Principal = total chit value
+                    break
+                case 'POST_OFFICE_FD':
+                    submitData.tenure = formData.tenure
+                    submitData.payment_cycle = 'YEARLY'
+                    submitData.account_number = formData.account_number
+                    submitData.branch = formData.branch
+                    break
+                case 'POST_OFFICE_RD':
+                    submitData.monthly_amount = Number(formData.monthly_amount) || 0
+                    submitData.principal = submitData.monthly_amount * 60 // 5 year
+                    submitData.payment_cycle = 'MONTHLY'
+                    submitData.account_number = formData.account_number
+                    submitData.branch = formData.branch
+                    break
+                case 'PPF':
+                    submitData.yearly_deposit = Number(formData.yearly_deposit) || Number(formData.principal)
+                    submitData.payment_cycle = 'YEARLY'
+                    submitData.account_number = formData.account_number
+                    submitData.branch = formData.branch
+                    break
+                case 'NSC':
+                case 'KVP':
+                case 'SCSS':
+                    submitData.account_number = formData.account_number
+                    submitData.branch = formData.branch
+                    submitData.payment_cycle = 'LUMPSUM'
+                    break
+                default:
+                    submitData.payment_cycle = formData.payment_cycle
+            }
+
+            // Add payment due day if available
+            if (formData.payment_due_day) {
+                submitData.payment_due_day = Number(formData.payment_due_day)
+            }
+
+            await onSubmit(submitData)
             onClose()
         } catch (error) {
             console.error('Error saving scheme:', error)
@@ -246,93 +608,501 @@ function SchemeForm({ scheme, onSubmit, onClose }) {
         }
     }
 
+    // Render type-specific form fields
+    const renderTypeSpecificFields = () => {
+        switch (schemeType) {
+            case 'CHIT_FUND':
+                // Calculate installment range based on chit value
+                const chitVal = Number(formData.chit_value) || 500000
+                const months = Number(formData.duration_months) || 20
+                const baseInst = chitVal / months
+                const firstBonus = Math.round(baseInst * 0.27) // ~27% bonus first month
+                const firstInstallment = baseInst - firstBonus
+                const lastInstallment = baseInst
+
+                return (
+                    <>
+                        {/* Chit Value Presets */}
+                        <div className="space-y-2">
+                            <Label>Chit Value (Quick Select)</Label>
+                            <div className="grid grid-cols-4 gap-2">
+                                {['3L', '5L', '10L', '20L'].map((preset) => {
+                                    const val = parseInt(preset) * 100000
+                                    return (
+                                        <button
+                                            key={preset}
+                                            type="button"
+                                            onClick={() => {
+                                                const newMonths = 20
+                                                const newBase = val / newMonths
+                                                setFormData({
+                                                    ...formData,
+                                                    chit_value: val,
+                                                    duration_months: newMonths,
+                                                    principal: val
+                                                })
+                                            }}
+                                            className={`p-2 rounded-lg border text-sm transition-all ${Number(formData.chit_value) === val
+                                                ? 'border-blue-500 bg-blue-500/10 text-blue-500'
+                                                : 'border-border hover:border-muted-foreground'
+                                                }`}
+                                        >
+                                            ₹{preset}
+                                        </button>
+                                    )
+                                })}
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Chit Value (₹)</Label>
+                                <Input
+                                    type="number"
+                                    placeholder="500000"
+                                    value={formData.chit_value ?? ''}
+                                    onChange={(e) => setFormData({ ...formData, chit_value: e.target.value, principal: e.target.value })}
+                                    required
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Duration (months)</Label>
+                                <Select
+                                    value={formData.duration_months || '20'}
+                                    onValueChange={(value) => setFormData({ ...formData, duration_months: value })}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="20">20 months</SelectItem>
+                                        <SelectItem value="25">25 months</SelectItem>
+                                        <SelectItem value="30">30 months</SelectItem>
+                                        <SelectItem value="40">40 months</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+
+                        {/* Calculated Installment Range */}
+                        <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                            <div className="text-sm text-muted-foreground mb-2">Calculated Installment Range</div>
+                            <div className="grid grid-cols-3 gap-2 text-sm">
+                                <div>
+                                    <span className="text-muted-foreground">Base:</span>
+                                    <span className="font-medium ml-1">₹{baseInst.toLocaleString('en-IN')}</span>
+                                </div>
+                                <div>
+                                    <span className="text-muted-foreground">Month 1:</span>
+                                    <span className="font-medium ml-1 text-emerald-500">₹{Math.round(firstInstallment).toLocaleString('en-IN')}</span>
+                                </div>
+                                <div>
+                                    <span className="text-muted-foreground">Month {months}:</span>
+                                    <span className="font-medium ml-1">₹{Math.round(lastInstallment).toLocaleString('en-IN')}</span>
+                                </div>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-2">
+                                Early months pay less (more bonus), last month pays full base amount
+                            </p>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Commission %</Label>
+                                <Input
+                                    type="number"
+                                    step="0.5"
+                                    placeholder="4"
+                                    value={formData.commission_percent ?? ''}
+                                    onChange={(e) => setFormData({ ...formData, commission_percent: e.target.value })}
+                                />
+                                <p className="text-xs text-muted-foreground">Foreman/organizer fee</p>
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Won at Month (if won)</Label>
+                                <Select
+                                    value={formData.won_at_month || 'none'}
+                                    onValueChange={(value) => setFormData({ ...formData, won_at_month: value === 'none' ? '' : value })}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Not yet won" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="none">Not yet won</SelectItem>
+                                        {Array.from({ length: months }, (_, i) => i + 1).map((m) => (
+                                            <SelectItem key={m} value={String(m)}>Month {m}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+
+                        {/* Current Month Tracker */}
+                        <div className="space-y-2">
+                            <Label>Current Month (running)</Label>
+                            <Select
+                                value={formData.current_month || '1'}
+                                onValueChange={(value) => setFormData({ ...formData, current_month: value })}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {Array.from({ length: months }, (_, i) => i + 1).map((m) => (
+                                        <SelectItem key={m} value={String(m)}>Month {m}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </>
+                )
+
+            case 'POST_OFFICE_FD':
+                return (
+                    <>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Deposit Amount (₹)</Label>
+                                <Input
+                                    type="number"
+                                    placeholder="100000"
+                                    value={formData.principal ?? ''}
+                                    onChange={(e) => setFormData({ ...formData, principal: e.target.value })}
+                                    required
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Tenure</Label>
+                                <Select
+                                    value={formData.tenure}
+                                    onValueChange={(value) => {
+                                        const rate = INTEREST_RATES.POST_OFFICE_FD[`${value}Y`]
+                                        setFormData({ ...formData, tenure: value, interest_rate: rate })
+                                    }}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="1">1 Year @ 6.9%</SelectItem>
+                                        <SelectItem value="2">2 Years @ 7.0%</SelectItem>
+                                        <SelectItem value="3">3 Years @ 7.1%</SelectItem>
+                                        <SelectItem value="5">5 Years @ 7.5%</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Account Number</Label>
+                                <Input
+                                    placeholder="PO Account No."
+                                    value={formData.account_number ?? ''}
+                                    onChange={(e) => setFormData({ ...formData, account_number: e.target.value })}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Branch</Label>
+                                <Input
+                                    placeholder="Post Office Branch"
+                                    value={formData.branch ?? ''}
+                                    onChange={(e) => setFormData({ ...formData, branch: e.target.value })}
+                                />
+                            </div>
+                        </div>
+                    </>
+                )
+
+            case 'POST_OFFICE_RD':
+                return (
+                    <>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Monthly Deposit (₹)</Label>
+                                <Input
+                                    type="number"
+                                    placeholder="5000"
+                                    value={formData.monthly_amount ?? ''}
+                                    onChange={(e) => setFormData({ ...formData, monthly_amount: e.target.value })}
+                                    required
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Interest Rate</Label>
+                                <Input
+                                    type="number"
+                                    step="0.1"
+                                    value={formData.interest_rate || INTEREST_RATES.POST_OFFICE_RD}
+                                    onChange={(e) => setFormData({ ...formData, interest_rate: e.target.value })}
+                                    disabled
+                                />
+                                <p className="text-xs text-muted-foreground">5-year term @ 6.7% p.a.</p>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Account Number</Label>
+                                <Input
+                                    placeholder="RD Account No."
+                                    value={formData.account_number ?? ''}
+                                    onChange={(e) => setFormData({ ...formData, account_number: e.target.value })}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Branch</Label>
+                                <Input
+                                    placeholder="Post Office Branch"
+                                    value={formData.branch ?? ''}
+                                    onChange={(e) => setFormData({ ...formData, branch: e.target.value })}
+                                />
+                            </div>
+                        </div>
+                    </>
+                )
+
+            case 'NSC':
+            case 'KVP':
+                return (
+                    <>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Investment Amount (₹)</Label>
+                                <Input
+                                    type="number"
+                                    placeholder="100000"
+                                    value={formData.principal ?? ''}
+                                    onChange={(e) => setFormData({ ...formData, principal: e.target.value })}
+                                    required
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Interest Rate (%)</Label>
+                                <Input
+                                    type="number"
+                                    step="0.1"
+                                    value={formData.interest_rate || INTEREST_RATES[schemeType]}
+                                    disabled
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                    {schemeType === 'NSC' ? '5 years @ 7.7% p.a.' : 'Doubles in 115 months'}
+                                </p>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Certificate / Account No.</Label>
+                                <Input
+                                    placeholder="Certificate Number"
+                                    value={formData.account_number ?? ''}
+                                    onChange={(e) => setFormData({ ...formData, account_number: e.target.value })}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Branch</Label>
+                                <Input
+                                    placeholder="Post Office Branch"
+                                    value={formData.branch ?? ''}
+                                    onChange={(e) => setFormData({ ...formData, branch: e.target.value })}
+                                />
+                            </div>
+                        </div>
+                    </>
+                )
+
+            case 'PPF':
+                return (
+                    <>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Total Balance (₹)</Label>
+                                <Input
+                                    type="number"
+                                    placeholder="Current balance"
+                                    value={formData.principal ?? ''}
+                                    onChange={(e) => setFormData({ ...formData, principal: e.target.value })}
+                                    required
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Yearly Deposit (₹)</Label>
+                                <Input
+                                    type="number"
+                                    placeholder="150000"
+                                    value={formData.yearly_deposit ?? ''}
+                                    onChange={(e) => setFormData({ ...formData, yearly_deposit: e.target.value })}
+                                />
+                                <p className="text-xs text-muted-foreground">Max ₹1.5L/year</p>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Account Number</Label>
+                                <Input
+                                    placeholder="PPF Account No."
+                                    value={formData.account_number ?? ''}
+                                    onChange={(e) => setFormData({ ...formData, account_number: e.target.value })}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Interest Rate</Label>
+                                <Input
+                                    value={`${INTEREST_RATES.PPF}%`}
+                                    disabled
+                                />
+                            </div>
+                        </div>
+                    </>
+                )
+
+            default: // PRIVATE_FINANCE
+                return (
+                    <>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Amount Invested (₹)</Label>
+                                <Input
+                                    type="number"
+                                    placeholder="200000"
+                                    value={formData.principal ?? ''}
+                                    onChange={(e) => setFormData({ ...formData, principal: e.target.value })}
+                                    required
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Interest Rate (%/year)</Label>
+                                <Input
+                                    type="number"
+                                    step="0.5"
+                                    placeholder="18"
+                                    value={formData.interest_rate ?? ''}
+                                    onChange={(e) => setFormData({ ...formData, interest_rate: e.target.value })}
+                                    required
+                                />
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Payout Cycle</Label>
+                                <Select
+                                    value={formData.payment_cycle}
+                                    onValueChange={(value) => setFormData({ ...formData, payment_cycle: value })}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="MONTHLY">Monthly</SelectItem>
+                                        <SelectItem value="QUARTERLY">Quarterly</SelectItem>
+                                        <SelectItem value="YEARLY">Yearly</SelectItem>
+                                        <SelectItem value="LUMPSUM">Lumpsum</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Risk Level</Label>
+                                <Select
+                                    value={formData.risk_level}
+                                    onValueChange={(value) => setFormData({ ...formData, risk_level: value })}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="LOW">Low</SelectItem>
+                                        <SelectItem value="MEDIUM">Medium</SelectItem>
+                                        <SelectItem value="HIGH">High</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                    </>
+                )
+        }
+    }
+
     return (
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
+            {/* Scheme Type Selector */}
             <div className="space-y-2">
-                <Label htmlFor="name">Scheme / Person Name</Label>
+                <Label>Investment Type</Label>
+                <div className="grid grid-cols-4 gap-2">
+                    {Object.entries(SCHEME_TYPES).map(([key, config]) => {
+                        const Icon = config.icon
+                        return (
+                            <button
+                                key={key}
+                                type="button"
+                                onClick={() => handleSchemeTypeChange(key)}
+                                className={`p-2 rounded-lg border text-center transition-all ${schemeType === key
+                                    ? `border-${config.color}-500 bg-${config.color}-500/10`
+                                    : 'border-border hover:border-muted-foreground'
+                                    }`}
+                            >
+                                <Icon className={`w-5 h-5 mx-auto mb-1 ${schemeType === key ? `text-${config.color}-500` : 'text-muted-foreground'}`} />
+                                <span className="text-xs">{config.label}</span>
+                            </button>
+                        )
+                    })}
+                </div>
+            </div>
+
+            {/* Scheme Name */}
+            <div className="space-y-2">
+                <Label htmlFor="name">
+                    {schemeType === 'CHIT_FUND' ? 'Chit Name / Organizer' :
+                        schemeType.startsWith('POST') || schemeType === 'NSC' || schemeType === 'KVP' || schemeType === 'PPF' ? 'Account Name / Description' :
+                            'Scheme / Person Name'}
+                </Label>
                 <Input
                     id="name"
-                    placeholder="e.g., Ravi Finance, Gold Scheme"
-                    value={formData.name}
+                    placeholder={
+                        schemeType === 'CHIT_FUND' ? 'e.g., Lakshmi Chits - 5L' :
+                            schemeType === 'POST_OFFICE_FD' ? 'e.g., Post Office FD 2024' :
+                                'e.g., Ravi Finance Scheme'
+                    }
+                    value={formData.name ?? ''}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     required
                 />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                    <Label htmlFor="principal">Amount (₹)</Label>
-                    <Input
-                        id="principal"
-                        type="number"
-                        placeholder="200000"
-                        value={formData.principal}
-                        onChange={(e) => setFormData({ ...formData, principal: e.target.value })}
-                        required
-                    />
-                </div>
-                <div className="space-y-2">
-                    <Label htmlFor="interest_rate">Interest Rate (%/year)</Label>
-                    <Input
-                        id="interest_rate"
-                        type="number"
-                        step="0.1"
-                        placeholder="18"
-                        value={formData.interest_rate}
-                        onChange={(e) => setFormData({ ...formData, interest_rate: e.target.value })}
-                    />
-                </div>
-            </div>
+            {/* Type-specific fields */}
+            {renderTypeSpecificFields()}
 
+            {/* Common fields */}
             <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                    <Label htmlFor="payment_cycle">Payout Cycle</Label>
-                    <Select
-                        value={formData.payment_cycle}
-                        onValueChange={(value) => setFormData({ ...formData, payment_cycle: value })}
-                    >
-                        <SelectTrigger>
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="MONTHLY">Monthly</SelectItem>
-                            <SelectItem value="QUARTERLY">Quarterly</SelectItem>
-                            <SelectItem value="YEARLY">Yearly</SelectItem>
-                            <SelectItem value="LUMPSUM">Lumpsum</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
-                <div className="space-y-2">
-                    <Label htmlFor="risk_level">Risk Level</Label>
-                    <Select
-                        value={formData.risk_level}
-                        onValueChange={(value) => setFormData({ ...formData, risk_level: value })}
-                    >
-                        <SelectTrigger>
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="LOW">Low</SelectItem>
-                            <SelectItem value="MEDIUM">Medium</SelectItem>
-                            <SelectItem value="HIGH">High</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                    <Label htmlFor="start_date">Start Date</Label>
+                    <Label>Start Date</Label>
                     <Input
-                        id="start_date"
                         type="date"
-                        value={formData.start_date}
+                        value={formData.start_date ?? ''}
                         onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
                         required
                     />
                 </div>
+
+                {['CHIT_FUND', 'PRIVATE_FINANCE', 'POST_OFFICE_RD'].includes(schemeType) && (
+                    <div className="space-y-2">
+                        <Label>Payment Due Day</Label>
+                        <Select
+                            value={formData.payment_due_day ? String(formData.payment_due_day) : 'none'}
+                            onValueChange={(value) => setFormData({ ...formData, payment_due_day: value === 'none' ? '' : value })}
+                        >
+                            <SelectTrigger>
+                                <SelectValue placeholder="Select day" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="none">None</SelectItem>
+                                {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
+                                    <SelectItem key={d} value={String(d)}>{d}{d === 1 ? 'st' : d === 2 ? 'nd' : d === 3 ? 'rd' : 'th'} of month</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                )}
+
                 <div className="space-y-2">
-                    <Label htmlFor="status">Status</Label>
+                    <Label>Status</Label>
                     <Select
                         value={formData.status}
                         onValueChange={(value) => setFormData({ ...formData, status: value })}
@@ -342,33 +1112,38 @@ function SchemeForm({ scheme, onSubmit, onClose }) {
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="ACTIVE">Active</SelectItem>
-                            <SelectItem value="DELAYED">Delayed</SelectItem>
+                            <SelectItem value="MATURED">Matured</SelectItem>
                             <SelectItem value="CLOSED">Closed</SelectItem>
-                            <SelectItem value="DEFAULTED">Defaulted</SelectItem>
+                            {schemeType === 'PRIVATE_FINANCE' && (
+                                <>
+                                    <SelectItem value="DELAYED">Delayed</SelectItem>
+                                    <SelectItem value="DEFAULTED">Defaulted</SelectItem>
+                                </>
+                            )}
                         </SelectContent>
                     </Select>
                 </div>
             </div>
 
             <div className="space-y-2">
-                <Label htmlFor="notes">Notes (optional)</Label>
-                <Input
-                    id="notes"
-                    placeholder="Payment schedule, contact info, etc."
-                    value={formData.notes}
+                <Label>Notes (optional)</Label>
+                <Textarea
+                    placeholder="Additional details, contact info, etc."
+                    value={formData.notes ?? ''}
                     onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    rows={2}
                 />
             </div>
 
-            <div className="flex gap-3 pt-4">
+            <div className="flex gap-3 pt-4 sticky bottom-0 bg-background">
                 <Button type="button" variant="outline" className="flex-1" onClick={onClose}>
                     Cancel
                 </Button>
                 <Button type="submit" className="flex-1" disabled={loading}>
-                    {loading ? 'Saving...' : (scheme ? 'Update' : 'Add Scheme')}
+                    {loading ? 'Saving...' : (scheme ? 'Update' : 'Add Investment')}
                 </Button>
             </div>
-        </form>
+        </form >
     )
 }
 
@@ -387,15 +1162,213 @@ function EmptyState({ onAdd }) {
             >
                 <TrendingUp className="w-8 h-8 text-violet-500" />
             </motion.div>
-            <h3 className="text-lg font-semibold mb-2">No Finance Schemes Yet</h3>
+            <h3 className="text-lg font-semibold mb-2">No Investments Yet</h3>
             <p className="text-muted-foreground mb-4 max-w-xs">
-                Track your private finance investments and expected returns.
+                Track your chit funds, post office schemes, and private finance investments.
             </p>
             <Button onClick={onAdd} className="gap-2">
                 <Plus className="w-4 h-4" />
-                Add Scheme
+                Add Investment
             </Button>
         </motion.div>
+    )
+}
+
+// Payment History Dialog Component
+function PaymentHistoryDialog({ scheme, onClose }) {
+    const [payments, setPayments] = useState([])
+    const [loading, setLoading] = useState(true)
+    const [amount, setAmount] = useState('')
+    const [date, setDate] = useState(new Date().toISOString().split('T')[0])
+    const [notes, setNotes] = useState('')
+    const [monthNumber, setMonthNumber] = useState('')
+
+    // Fetch payments on load
+    useEffect(() => {
+        loadPayments()
+    }, [scheme.id])
+
+    async function loadPayments() {
+        try {
+            const data = await getFinancePayments(scheme.id)
+            setPayments(data || [])
+        } catch (error) {
+            console.error('Error fetching payments:', error)
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    async function handleAddPayment(e) {
+        e.preventDefault()
+        if (!amount || Number(amount) <= 0) return
+
+        try {
+            const newPayment = {
+                scheme_id: scheme.id,
+                amount: Number(amount),
+                payment_date: date,
+                notes: notes,
+                created_at: new Date().toISOString()
+            }
+
+            if (scheme.scheme_type === 'CHIT_FUND') {
+                newPayment.month_number = Number(monthNumber) || null
+            }
+
+            const saved = await addFinancePayment(newPayment)
+            if (saved) {
+                setPayments([saved, ...payments])
+                setAmount('')
+                setNotes('')
+                setMonthNumber('')
+                // If it's a chit fund, user might want to update current_month of scheme too - optional
+                // future task: prompt to update scheme current_month
+            }
+        } catch (error) {
+            console.error('Error adding payment:', error)
+        }
+    }
+
+    async function handleDelete(id) {
+        if (!confirm('Are you sure you want to delete this payment?')) return
+        try {
+            await deleteFinancePayment(id)
+            setPayments(payments.filter(p => p.id !== id))
+        } catch (error) {
+            console.error('Error deleting payment:', error)
+        }
+    }
+
+    const totalPaid = payments.reduce((sum, p) => sum + Number(p.amount), 0)
+
+    return (
+        <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+                <DialogTitle>Payment History - {scheme.name}</DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-6">
+                {/* Stats */}
+                <div className="p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex justify-between items-center">
+                    <div>
+                        <p className="text-sm text-muted-foreground">Total Paid</p>
+                        <p className="text-2xl font-bold text-emerald-500">{formatCurrency(totalPaid)}</p>
+                    </div>
+                    {scheme.scheme_type === 'CHIT_FUND' && (
+                        <div>
+                            <p className="text-sm text-muted-foreground text-right">Months Paid</p>
+                            <p className="text-2xl font-bold text-right">{payments.length}</p>
+                        </div>
+                    )}
+                </div>
+
+                {/* Add Payment Form */}
+                <form onSubmit={handleAddPayment} className="space-y-4 p-4 rounded-lg border bg-muted/30">
+                    <h4 className="font-semibold text-sm flex items-center gap-2">
+                        <Plus className="w-4 h-4" /> Record New Payment
+                    </h4>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                            <Label>Amount (₹)</Label>
+                            <Input
+                                type="number"
+                                value={amount}
+                                onChange={(e) => setAmount(e.target.value)}
+                                placeholder="e.g. 5000"
+                                required
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Date</Label>
+                            <Input
+                                type="date"
+                                value={date}
+                                onChange={(e) => setDate(e.target.value)}
+                                required
+                            />
+                        </div>
+                    </div>
+
+                    {scheme.scheme_type === 'CHIT_FUND' && (
+                        <div className="space-y-2">
+                            <Label>Instalment Month No.</Label>
+                            <Input
+                                type="number"
+                                value={monthNumber}
+                                onChange={(e) => setMonthNumber(e.target.value)}
+                                placeholder={`e.g. ${payments.length + 1}`}
+                            />
+                        </div>
+                    )}
+
+                    <div className="space-y-2">
+                        <Label>Notes (optional)</Label>
+                        <Input
+                            value={notes}
+                            onChange={(e) => setNotes(e.target.value)}
+                            placeholder="Transaction ID, remarks..."
+                        />
+                    </div>
+
+                    <Button type="submit" size="sm" className="w-full">
+                        Add Payment
+                    </Button>
+                </form>
+
+                {/* List */}
+                <div className="space-y-3">
+                    <h4 className="font-semibold text-sm">History</h4>
+                    {loading ? (
+                        <div className="text-center py-8 text-muted-foreground">Loading history...</div>
+                    ) : payments.length === 0 ? (
+                        <div className="text-center py-8 text-muted-foreground border rounded-lg border-dashed">
+                            No payments recorded yet
+                        </div>
+                    ) : (
+                        <div className="space-y-2">
+                            {payments.map((payment) => (
+                                <div
+                                    key={payment.id}
+                                    className="p-3 rounded-lg border bg-card hover:bg-accent/5 transition-colors flex justify-between items-center group"
+                                >
+                                    <div className="flex gap-4 items-center">
+                                        <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500 font-bold text-xs">
+                                            {new Date(payment.payment_date).getDate()}
+                                            <span className="text-[10px] ml-0.5">
+                                                {new Date(payment.payment_date).toLocaleString('default', { month: 'short' }).substring(0, 3)}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <p className="font-medium">{formatCurrency(payment.amount)}</p>
+                                            <div className="text-xs text-muted-foreground flex gap-2">
+                                                <span>{formatDate(payment.payment_date)}</span>
+                                                {payment.month_number && (
+                                                    <span className="bg-blue-500/10 text-blue-500 px-1.5 rounded">
+                                                        Month {payment.month_number}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {payment.notes && (
+                                                <p className="text-xs text-muted-foreground mt-0.5 italic">{payment.notes}</p>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                                        onClick={() => handleDelete(payment.id)}
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+        </DialogContent>
     )
 }
 
@@ -405,6 +1378,7 @@ export default function FinancePage() {
     const [loading, setLoading] = useState(true)
     const [dialogOpen, setDialogOpen] = useState(false)
     const [editingScheme, setEditingScheme] = useState(null)
+    const [filter, setFilter] = useState('ALL')
 
     useEffect(() => {
         fetchSchemes()
@@ -425,11 +1399,16 @@ export default function FinancePage() {
         }
     }
 
+    // Filter schemes
+    const filteredSchemes = filter === 'ALL'
+        ? schemes
+        : schemes.filter(s => s.scheme_type === filter)
+
     // Calculate totals
     const totalInvested = schemes.reduce((sum, s) => sum + Number(s.principal), 0)
     const activeSchemes = schemes.filter(s => s.status === 'ACTIVE')
     const totalExpectedReturns = schemes.reduce((sum, s) => {
-        return sum + calculateExpectedReturns(s.principal, s.interest_rate, s.start_date, s.payment_cycle)
+        return sum + calculateExpectedReturns(s)
     }, 0)
     const highRiskSchemes = schemes.filter(s => s.risk_level === 'HIGH' && s.status === 'ACTIVE')
 
@@ -467,21 +1446,21 @@ export default function FinancePage() {
             className="space-y-6 max-w-4xl mx-auto"
         >
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold">Private Finance</h1>
-                    <p className="text-muted-foreground">Track your high-yield investments</p>
+                    <h1 className="text-2xl font-bold">Investments</h1>
+                    <p className="text-muted-foreground">Track chits, post office schemes & private finance</p>
                 </div>
                 <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
                     <DialogTrigger asChild>
                         <Button className="gap-2" onClick={handleAdd}>
                             <Plus className="w-4 h-4" />
-                            <span className="hidden sm:inline">Add Scheme</span>
+                            <span className="hidden sm:inline">Add Investment</span>
                         </Button>
                     </DialogTrigger>
-                    <DialogContent className="sm:max-w-md">
+                    <DialogContent className="sm:max-w-lg">
                         <DialogHeader>
-                            <DialogTitle>{editingScheme ? 'Edit Scheme' : 'Add Finance Scheme'}</DialogTitle>
+                            <DialogTitle>{editingScheme ? 'Edit Investment' : 'Add Investment'}</DialogTitle>
                         </DialogHeader>
                         <SchemeForm
                             scheme={editingScheme}
@@ -523,6 +1502,30 @@ export default function FinancePage() {
                 </Card>
             </motion.div>
 
+            {/* Filter Tabs */}
+            {schemes.length > 0 && (
+                <Tabs value={filter} onValueChange={setFilter} className="w-full">
+                    <TabsList className="w-full h-auto flex-wrap justify-start gap-1 bg-transparent p-0">
+                        <TabsTrigger value="ALL" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                            All
+                        </TabsTrigger>
+                        {Object.entries(SCHEME_TYPES).map(([key, config]) => {
+                            const count = schemes.filter(s => s.scheme_type === key).length
+                            if (count === 0) return null
+                            return (
+                                <TabsTrigger
+                                    key={key}
+                                    value={key}
+                                    className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                                >
+                                    {config.label} ({count})
+                                </TabsTrigger>
+                            )
+                        })}
+                    </TabsList>
+                </Tabs>
+            )}
+
             {/* Warning for high risk */}
             {highRiskSchemes.length > 0 && (
                 <motion.div
@@ -549,7 +1552,7 @@ export default function FinancePage() {
                             <div key={i} className="h-52 rounded-xl bg-card animate-pulse" />
                         ))}
                     </div>
-                ) : schemes.length === 0 ? (
+                ) : filteredSchemes.length === 0 ? (
                     <EmptyState onAdd={handleAdd} />
                 ) : (
                     <motion.div
@@ -558,7 +1561,7 @@ export default function FinancePage() {
                         animate="visible"
                         className="grid grid-cols-1 sm:grid-cols-2 gap-4"
                     >
-                        {schemes.map((scheme) => (
+                        {filteredSchemes.map((scheme) => (
                             <SchemeCard
                                 key={scheme.id}
                                 scheme={scheme}

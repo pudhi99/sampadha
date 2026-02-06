@@ -3,6 +3,7 @@ import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
+import { PushNotificationPrompt } from "@/components/notifications/PushNotificationPrompt";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -41,6 +42,7 @@ export default function RootLayout({ children }) {
       >
         <AuthProvider>
           <AppLayout>{children}</AppLayout>
+          <PushNotificationPrompt />
         </AuthProvider>
         <ServiceWorkerRegister />
       </body>

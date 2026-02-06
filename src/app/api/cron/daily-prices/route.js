@@ -1,13 +1,13 @@
 import { captureDailyPrices } from '@/lib/priceTracking'
-import { createDailyPriceAlerts } from '@/lib/notifications'
+import { runDailyNotificationJobs } from '@/lib/notifications'
 
 /**
- * Cron Job API Route - Daily Precious Metals Price Alerts
- * Runs at 8 AM and 9 AM IST
+ * Cron Job API Route - Daily Price Capture & Notifications
+ * Runs at 9 AM IST daily
  * 
  * Setup in Vercel:
  * 1. Add CRON_SECRET to environment variables
- * 2. Configure cron: '0 2,3 * * *' (8 AM and 9 AM IST = 2:30 AM and 3:30 AM UTC)
+ * 2. Configure cron: '30 3 * * *' (9 AM IST = 3:30 AM UTC)
  */
 export async function GET(request) {
     try {
@@ -19,23 +19,22 @@ export async function GET(request) {
             return new Response('Unauthorized', { status: 401 })
         }
 
-        // Capture current prices for all metals
+        // Step 1: Capture current prices for all metals
         console.log('[Cron] Capturing daily prices...')
         const pricesResult = await captureDailyPrices()
 
-        // Create price alert notifications
-        console.log('[Cron] Creating price alerts...')
-        const notifications = await createDailyPriceAlerts()
+        // Step 2: Run all notification jobs (price alerts, loan reminders, asset updates)
+        console.log('[Cron] Running notification jobs...')
+        const notificationSummary = await runDailyNotificationJobs()
 
         const response = {
             success: true,
             timestamp: new Date().toISOString(),
             pricesCaptured: {
                 gold: !!pricesResult?.gold,
-                silver: !!pricesResult?.silver,
-                copper: !!pricesResult?.copper
+                silver: !!pricesResult?.silver
             },
-            notificationsCreated: notifications?.length || 0
+            notifications: notificationSummary
         }
 
         console.log('[Cron] Success:', response)

@@ -6,35 +6,87 @@
 
 import { supabase } from './supabase'
 
+// GoodReturns Widget API URL
+const WIDGET_API = 'https://www.goodreturns.in/dynamic_html_includes/web/widget/v2_home_page_top_widget.html'
+
 /**
- * Fetch current prices from GoodReturns API
- * @param {string} city - City for prices (default: mumbai)
+ * Parse GoodReturns widget HTML to extract prices
+ */
+function parseWidgetHTML(html) {
+    const data = { gold: null, silver: null }
+
+    try {
+        // Gold pattern: 22k Gold <span class="stock-price">₹ 14,110/gm</span>
+        const goldMatch = html.match(/22k\s*Gold\s*<span[^>]*class="stock-price"[^>]*>(?:&#8377;|₹)?\s*([\d,]+)\s*\/gm<\/span>/i)
+        if (goldMatch) {
+            const price22k = parseInt(goldMatch[1].replace(/,/g, ''))
+            const price24k = Math.round(price22k * 24 / 22)
+            const price18k = Math.round(price22k * 18 / 22)
+            data.gold = {
+                pricePerGram: price24k,
+                '24K': { pricePerGram: price24k, pricePer8g: price24k * 8, pricePer10g: price24k * 10 },
+                '22K': { pricePerGram: price22k, pricePer8g: price22k * 8, pricePer10g: price22k * 10 },
+                '18K': { pricePerGram: price18k, pricePer8g: price18k * 8, pricePer10g: price18k * 10 },
+                source: 'goodreturns.in'
+            }
+        }
+
+        // Silver pattern: Silver <span class="stock-price">₹ 2,80,000/kg</span>
+        const silverMatch = html.match(/Silver\s*<span[^>]*class="stock-price"[^>]*>(?:&#8377;|₹)?\s*([\d,]+)\/kg<\/span>/i)
+        if (silverMatch) {
+            const pricePerKg = parseInt(silverMatch[1].replace(/,/g, ''))
+            const pricePerGram = Math.round(pricePerKg / 1000)
+            data.silver = {
+                pricePerGram,
+                pricePer10g: pricePerGram * 10,
+                pricePer100g: pricePerGram * 100,
+                pricePer1kg: pricePerKg,
+                source: 'goodreturns.in'
+            }
+        }
+    } catch (e) {
+        console.error('[PriceTracking] Parse error:', e)
+    }
+
+    return data
+}
+
+/**
+ * Fetch current prices directly from GoodReturns widget
+ * This works both client-side and server-side (cron jobs)
  * @returns {Promise<Object>} { gold, silver } with price data
  */
-export async function fetchAllMetalsPrices(city = 'mumbai') {
+export async function fetchAllMetalsPrices() {
     try {
-        const baseUrl = typeof window !== 'undefined'
-            ? ''
-            : (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000')
+        const timestamp = Date.now()
+        const response = await fetch(`${WIDGET_API}?q=${timestamp}`, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'text/html,application/xhtml+xml',
+                'Accept-Language': 'en-IN,en;q=0.9'
+            }
+        })
 
-        const response = await fetch(`${baseUrl}/api/prices?city=${city}&timeframe=1M`)
-        const data = await response.json()
+        if (!response.ok) {
+            throw new Error(`GoodReturns returned ${response.status}`)
+        }
 
-        if (!data.success) {
-            console.error('GoodReturns API error:', data.error)
+        const html = await response.text()
+        const data = parseWidgetHTML(html)
+
+        if (!data.gold && !data.silver) {
             return {
-                error: data.error || 'Failed to fetch metal prices',
+                error: 'Could not parse prices from GoodReturns',
                 gold: null,
                 silver: null
             }
         }
 
         return {
-            gold: data.prices?.gold || null,
-            silver: data.prices?.silver || null,
-            timestamp: data.timestamp,
-            source: data.source,
-            city: data.city
+            gold: data.gold,
+            silver: data.silver,
+            timestamp: new Date().toISOString(),
+            source: 'goodreturns.in'
         }
     } catch (error) {
         console.error('Error fetching metals prices:', error)
@@ -224,6 +276,38 @@ export async function getTodaysPrice(metal) {
         return data
     } catch (error) {
         console.error(`Error getting today's ${metal} price:`, error)
+        return null
+    }
+}
+
+/**
+ * Get latest stored price in structured format (for notifications)
+ * @param {string} metal - 'GOLD' or 'SILVER'
+ * @returns {Promise<Object|null>} Structured price data or null
+ */
+export async function getLatestStoredPrice(metal) {
+    try {
+        const record = await getTodaysPrice(metal)
+        if (!record) return null
+
+        if (metal === 'GOLD') {
+            return {
+                pricePerGram: record.price_24k_per_gram,
+                '24K': { pricePerGram: record.price_24k_per_gram },
+                '22K': { pricePerGram: record.price_22k_per_gram },
+                '18K': { pricePerGram: record.price_18k_per_gram },
+                date: record.date
+            }
+        } else if (metal === 'SILVER') {
+            return {
+                pricePerGram: record.price_24k_per_gram, // Silver uses this field
+                date: record.date
+            }
+        }
+
+        return null
+    } catch (error) {
+        console.error(`Error getting latest stored ${metal} price:`, error)
         return null
     }
 }
