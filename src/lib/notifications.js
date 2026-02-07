@@ -3,7 +3,7 @@
  * Create and manage price alerts, loan reminders, and asset updates
  */
 
-import { supabase } from './supabase'
+import { supabase, supabaseAdmin } from './supabase'
 import { getPriceChange, getLatestStoredPrice } from './priceTracking'
 
 /**
@@ -32,7 +32,7 @@ export async function createNotification({ title, message, type, metal = null, p
             ...(priceChange !== undefined && priceChange !== null && { priceChange })
         }
 
-        const { data, error } = await supabase
+        const { data, error } = await supabaseAdmin
             .from('notifications')
             .insert([{
                 title,
@@ -215,7 +215,7 @@ export async function createLoanReminders() {
         const today = new Date()
 
         // Fetch active loans (both given and taken) - don't filter by next_due_date as column may not exist
-        const { data: loans, error } = await supabase
+        const { data: loans, error } = await supabaseAdmin
             .from('loans')
             .select('*')
             .eq('status', 'ACTIVE')
@@ -297,7 +297,7 @@ export async function createAssetUpdateNotifications() {
         const notifications = []
 
         // Fetch gold and silver assets
-        const { data: assets, error } = await supabase
+        const { data: assets, error } = await supabaseAdmin
             .from('assets')
             .select('*')
             .in('type', ['GOLD', 'SILVER'])
@@ -379,7 +379,7 @@ export async function createFinanceReminders() {
         in30Days.setDate(in30Days.getDate() + 30)
 
         // Fetch all active finance schemes
-        const { data: schemes, error } = await supabase
+        const { data: schemes, error } = await supabaseAdmin
             .from('finance_schemes')
             .select('*')
             .eq('status', 'ACTIVE')
