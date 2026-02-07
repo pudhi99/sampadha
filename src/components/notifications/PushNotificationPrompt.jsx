@@ -128,18 +128,28 @@ export function PushNotificationPrompt() {
 
             const data = await response.json()
 
-            if (data.success) {
-                setIsSubscribed(true)
-                setShowPrompt(false)
+            // Close popup regardless of API success - browser permission is already granted
+            setIsSubscribed(true)
+            setShowPrompt(false)
 
+            if (data.success) {
                 // Show success notification
                 new Notification('🔔 Notifications Enabled!', {
                     body: 'You will now receive price alerts, loan reminders, and asset updates.',
                     icon: '/logo-192.png'
                 })
+            } else {
+                console.warn('Push subscription API error:', data.error)
+                // Still show a notification since browser permission is granted
+                new Notification('🔔 Notifications Enabled!', {
+                    body: 'Browser notifications are on. Server sync may be delayed.',
+                    icon: '/logo-192.png'
+                })
             }
         } catch (error) {
             console.error('Error subscribing to push:', error)
+            // Still close the prompt since permission was likely granted
+            setShowPrompt(false)
         }
 
         setLoading(false)

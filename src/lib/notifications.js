@@ -25,15 +25,20 @@ export const NOTIFICATION_TYPES = {
  */
 export async function createNotification({ title, message, type, metal = null, priceChange = null, metadata = null }) {
     try {
+        // Merge metal and priceChange into metadata if provided
+        const fullMetadata = {
+            ...(metadata || {}),
+            ...(metal && { metal }),
+            ...(priceChange !== undefined && priceChange !== null && { priceChange })
+        }
+
         const { data, error } = await supabase
             .from('notifications')
             .insert([{
                 title,
                 message,
                 type,
-                metal,
-                price_change: priceChange,
-                metadata,
+                metadata: Object.keys(fullMetadata).length > 0 ? fullMetadata : null,
                 is_read: false
             }])
             .select()
@@ -208,23 +213,40 @@ export async function createLoanReminders() {
     try {
         const notifications = []
         const today = new Date()
-        const in3Days = new Date(today)
-        in3Days.setDate(in3Days.getDate() + 3)
-        const in7Days = new Date(today)
-        in7Days.setDate(in7Days.getDate() + 7)
 
-        // Fetch active loans (both given and taken)
+        // Fetch active loans (both given and taken) - don't filter by next_due_date as column may not exist
         const { data: loans, error } = await supabase
             .from('loans')
             .select('*')
             .eq('status', 'ACTIVE')
-            .not('next_due_date', 'is', null)
 
         if (error) throw error
         if (!loans || loans.length === 0) return []
 
         for (const loan of loans) {
-            const dueDate = new Date(loan.next_due_date)
+            // Calculate next due date: Use next_due_date if available, else calculate from start_date
+            let dueDate
+
+            if (loan.next_due_date) {
+                dueDate = new Date(loan.next_due_date)
+            } else if (loan.payment_day) {
+                // Use payment_day of this month or next
+                dueDate = new Date(today.getFullYear(), today.getMonth(), loan.payment_day)
+                if (dueDate < today) {
+                    dueDate.setMonth(dueDate.getMonth() + 1)
+                }
+            } else if (loan.start_date) {
+                // Calculate based on start_date - assume monthly payments on same day
+                const startDay = new Date(loan.start_date).getDate()
+                dueDate = new Date(today.getFullYear(), today.getMonth(), startDay)
+                if (dueDate < today) {
+                    dueDate.setMonth(dueDate.getMonth() + 1)
+                }
+            } else {
+                // No date info available, skip
+                continue
+            }
+
             const daysUntilDue = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24))
 
             // Skip if already past or more than 7 days away
@@ -244,13 +266,13 @@ export async function createLoanReminders() {
 
             const loanType = loan.type === 'GIVEN' ? 'Loan to' : 'Loan from'
             const title = `${emoji} ${urgency}`
-            const message = `${loanType} ${loan.borrower_name}: ₹${loan.emi_amount?.toLocaleString('en-IN') || loan.remaining_amount?.toLocaleString('en-IN')} payment ${daysUntilDue === 0 ? 'is due today' : 'is coming up'}`
+            const message = `${loanType} ${loan.borrower_name}: ₹${loan.emi_amount?.toLocaleString('en-IN') || loan.remaining_amount?.toLocaleString('en-IN') || loan.principal?.toLocaleString('en-IN')} payment ${daysUntilDue === 0 ? 'is due today' : 'is coming up'}`
 
             const notification = await createNotification({
                 title,
                 message,
                 type: NOTIFICATION_TYPES.LOAN_REMINDER,
-                metadata: { loanId: loan.id, loanType: loan.type, dueDate: loan.next_due_date }
+                metadata: { loanId: loan.id, loanType: loan.type, dueDate: dueDate.toISOString() }
             })
 
             if (notification) {

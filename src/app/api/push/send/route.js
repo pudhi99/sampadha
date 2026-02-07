@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/supabase'
 import webPush from 'web-push'
 
 // Configure VAPID keys
@@ -59,7 +59,7 @@ export async function POST(request) {
         }
 
         // Get all push subscriptions
-        const { data: subscriptions, error } = await supabase
+        const { data: subscriptions, error } = await supabaseAdmin
             .from('push_subscriptions')
             .select('*')
 
@@ -142,7 +142,7 @@ export async function POST(request) {
         if (results.expired.length > 0) {
             console.log(`[Push Send] Cleaning ${results.expired.length} expired subscriptions`)
             for (const endpoint of results.expired) {
-                await supabase
+                await supabaseAdmin
                     .from('push_subscriptions')
                     .delete()
                     .eq('endpoint', endpoint)

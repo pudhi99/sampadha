@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/supabase'
 
 /**
  * POST /api/push/subscribe
@@ -21,7 +21,7 @@ export async function POST(request) {
         const keys = subscription.keys || {}
 
         // Upsert subscription (update if endpoint exists, insert if not)
-        const { data, error } = await supabase
+        const { data, error } = await supabaseAdmin
             .from('push_subscriptions')
             .upsert({
                 endpoint: subscription.endpoint,
@@ -74,7 +74,7 @@ export async function DELETE(request) {
             )
         }
 
-        const { error } = await supabase
+        const { error } = await supabaseAdmin
             .from('push_subscriptions')
             .delete()
             .eq('endpoint', endpoint)

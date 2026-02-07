@@ -11,7 +11,9 @@ import {
     Trash2,
     Info,
     ChevronRight,
-    Sparkles
+    Sparkles,
+    Bell,
+    Send
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -72,6 +74,25 @@ const settingsGroups = [
         ]
     },
     {
+        title: 'Notifications',
+        items: [
+            {
+                id: 'push-toggle',
+                icon: Bell,
+                label: 'Push Notifications',
+                description: 'Receive alerts for prices and reminders',
+                action: 'notification-toggle'
+            },
+            {
+                id: 'test-notification',
+                icon: Send,
+                label: 'Test Notification',
+                description: 'Send a test push notification',
+                action: 'test-notification'
+            }
+        ]
+    },
+    {
         title: 'Danger Zone',
         items: [
             {
@@ -84,6 +105,89 @@ const settingsGroups = [
         ]
     }
 ]
+
+// Inline notification toggle for settings
+function NotificationToggleInline() {
+    const [isSubscribed, setIsSubscribed] = useState(false)
+    const [loading, setLoading] = useState(true)
+
+    React.useEffect(() => {
+        checkStatus()
+    }, [])
+
+    const checkStatus = async () => {
+        if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+            setLoading(false)
+            return
+        }
+
+        try {
+            const registration = await navigator.serviceWorker.ready
+            const subscription = await registration.pushManager.getSubscription()
+            setIsSubscribed(!!subscription)
+        } catch (error) {
+            console.error('Error checking subscription:', error)
+        }
+        setLoading(false)
+    }
+
+    if (loading) {
+        return <span className="text-xs text-muted-foreground">Checking...</span>
+    }
+
+    return (
+        <div className={`
+            px-3 py-1 rounded-full text-xs font-medium
+            ${isSubscribed ? 'bg-green-500/20 text-green-500' : 'bg-muted text-muted-foreground'}
+        `}>
+            {isSubscribed ? 'Enabled' : 'Disabled'}
+        </div>
+    )
+}
+
+// Test notification button
+function TestNotificationButton() {
+    const [sending, setSending] = useState(false)
+
+    const handleTest = async () => {
+        setSending(true)
+        try {
+            const response = await fetch('/api/push/send', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    notifications: [{
+                        title: '🔔 Test Notification',
+                        message: 'This is a test push notification from Sampadha!'
+                    }]
+                })
+            })
+            const data = await response.json()
+            if (data.success && data.sent > 0) {
+                alert(`Test notification sent to ${data.sent} device(s)!`)
+            } else if (data.subscribers === 0) {
+                alert('No devices subscribed. Please enable notifications first.')
+            } else {
+                alert('Notification sent, but may not have reached your device.')
+            }
+        } catch (error) {
+            console.error('Test notification error:', error)
+            alert('Failed to send test notification: ' + error.message)
+        }
+        setSending(false)
+    }
+
+    return (
+        <Button
+            variant="outline"
+            size="sm"
+            onClick={handleTest}
+            disabled={sending}
+        >
+            {sending ? 'Sending...' : 'Send Test'}
+        </Button>
+    )
+}
 
 function SettingItem({ item }) {
     const Icon = item.icon
@@ -203,6 +307,14 @@ function SettingItem({ item }) {
                     <Button variant="ghost" size="icon" onClick={handleAction}>
                         <ChevronRight className="w-5 h-5" />
                     </Button>
+                )}
+
+                {item.action === 'notification-toggle' && (
+                    <NotificationToggleInline />
+                )}
+
+                {item.action === 'test-notification' && (
+                    <TestNotificationButton />
                 )}
 
                 {item.action === 'danger' && (
