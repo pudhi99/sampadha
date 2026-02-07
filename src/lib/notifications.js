@@ -634,10 +634,15 @@ async function sendPushNotificationsToSubscribers(notifications) {
     }
 
     try {
-        // Determine base URL for API call
-        const baseUrl = process.env.NEXT_PUBLIC_APP_URL ||
-            process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` :
-            'http://localhost:3000'
+        // Determine base URL for API call - fix operator precedence bug
+        let baseUrl = 'http://localhost:3000'
+        if (process.env.NEXT_PUBLIC_APP_URL) {
+            baseUrl = process.env.NEXT_PUBLIC_APP_URL
+        } else if (process.env.VERCEL_URL) {
+            baseUrl = `https://${process.env.VERCEL_URL}`
+        }
+
+        console.log(`[Push] Calling API at: ${baseUrl}/api/push/send`)
 
         const response = await fetch(`${baseUrl}/api/push/send`, {
             method: 'POST',
@@ -652,6 +657,13 @@ async function sendPushNotificationsToSubscribers(notifications) {
                 }))
             })
         })
+
+        // Check if response is OK before parsing JSON
+        if (!response.ok) {
+            const text = await response.text()
+            console.error('[Push] API error:', response.status, text.substring(0, 200))
+            return { sent: 0, failed: 0, error: `API returned ${response.status}` }
+        }
 
         const result = await response.json()
         console.log('[Push] API response:', result)
