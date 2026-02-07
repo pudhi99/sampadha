@@ -32,7 +32,8 @@ import {
     Sparkles,
     FileText,
     Coins,
-    Book
+    Book,
+    Target
 } from 'lucide-react'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
 import { GlobalSearch } from '@/components/search/GlobalSearch'
@@ -46,6 +47,7 @@ const allNavItems = [
     { href: '/finance', label: 'Private Finance', icon: TrendingUp },
     { href: '/prices', label: 'Price Tracker', icon: Coins },
     { href: '/reports', label: 'Reports', icon: FileText },
+    { href: '/goals', label: 'Goals', icon: Target },
     { href: '/guide', label: 'Guide', icon: Book },
     { href: '/add', label: 'Add New', icon: PlusCircle },
     { href: '/settings', label: 'Settings', icon: Settings },

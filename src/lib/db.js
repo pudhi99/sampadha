@@ -221,6 +221,20 @@ export async function getFinancePayments(schemeId) {
     return data
 }
 
+// Get all finance payments across all schemes
+export async function getAllFinancePayments() {
+    const { data, error } = await supabase
+        .from('finance_payments')
+        .select('*')
+        .order('payment_date', { ascending: false })
+
+    if (error) {
+        console.warn('Error fetching all finance payments:', error)
+        return []
+    }
+    return data || []
+}
+
 export async function addFinancePayment(payment) {
     const { data, error } = await supabase
         .from('finance_payments')
@@ -262,9 +276,16 @@ export async function getDashboardSummary() {
     // Get all finance schemes
     const { data: schemes, error: schemesError } = await supabase
         .from('finance_schemes')
-        .select('principal, status')
+        .select('id, principal, status, scheme_type')
 
     if (schemesError) throw schemesError
+
+    // Get all finance payments
+    const { data: payments, error: paymentsError } = await supabase
+        .from('finance_payments')
+        .select('scheme_id, amount')
+
+    if (paymentsError) throw paymentsError
 
     // Calculate totals
     const totalAssets = assets?.reduce((sum, a) => sum + Number(a.current_value), 0) || 0
@@ -277,7 +298,16 @@ export async function getDashboardSummary() {
     const activeLoansGiven = loansGiven.filter(l => l.status === 'ACTIVE').length
     const activeLoansTaken = loansTaken.filter(l => l.status === 'ACTIVE').length
 
-    const totalFinanceSchemes = schemes?.reduce((sum, s) => sum + Number(s.principal), 0) || 0
+    const totalFinanceSchemes = schemes?.reduce((sum, s) => {
+        // For recurring schemes, use actual payments
+        if (['CHIT_FUND', 'POST_OFFICE_RD', 'PPF'].includes(s.scheme_type)) {
+            const schemePayments = payments?.filter(p => p.scheme_id === s.id) || []
+            const actualPaid = schemePayments.reduce((psum, p) => psum + Number(p.amount), 0)
+            return sum + actualPaid
+        }
+        // For others (FD, Lending, Stocks), use principal
+        return sum + Number(s.principal)
+    }, 0) || 0
 
     // Net worth = Assets + Loans Given + Finance Schemes - Loans Taken
     const netWorth = totalAssets + totalLoansGiven + totalFinanceSchemes - totalLoansTaken
@@ -332,4 +362,83 @@ export async function getNetWorthHistory(days = 30) {
 
     if (error) throw error
     return data
+}
+
+// ============ GOALS ============
+
+export async function getGoals(status = null) {
+    let query = supabase.from('goals').select('*').order('created_at', { ascending: false })
+    if (status) query = query.eq('status', status)
+    const { data, error } = await query
+    if (error) throw error
+    return data
+}
+
+export async function getGoalById(id) {
+    const { data, error } = await supabase
+        .from('goals')
+        .select('*, goal_contributions(*)')
+        .eq('id', id)
+        .single()
+    if (error) throw error
+    return data
+}
+
+export async function createGoal(goal) {
+    const { data, error } = await supabase
+        .from('goals')
+        .insert([goal])
+        .select()
+        .single()
+    if (error) throw error
+    return data
+}
+
+export async function updateGoal(id, updates) {
+    const { data, error } = await supabase
+        .from('goals')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single()
+    if (error) throw error
+    return data
+}
+
+export async function deleteGoal(id) {
+    const { error } = await supabase
+        .from('goals')
+        .delete()
+        .eq('id', id)
+    if (error) throw error
+    return true
+}
+
+export async function addGoalContribution(contribution) {
+    const { data, error } = await supabase
+        .from('goal_contributions')
+        .insert([contribution])
+        .select()
+        .single()
+    if (error) throw error
+    return data
+}
+
+export async function getGoalContributions(goalId) {
+    const { data, error } = await supabase
+        .from('goal_contributions')
+        .select('*')
+        .eq('goal_id', goalId)
+        .order('contribution_date', { ascending: false })
+    if (error) throw error
+    return data
+}
+
+export async function deleteGoalContribution(id) {
+    const { error } = await supabase
+        .from('goal_contributions')
+        .delete()
+        .eq('id', id)
+    if (error) throw error
+    return true
 }

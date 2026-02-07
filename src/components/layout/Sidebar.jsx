@@ -15,7 +15,8 @@ import {
     Sparkles,
     BarChart3,
     Coins,
-    Book
+    Book,
+    Target
 } from 'lucide-react'
 
 const navItems = [
@@ -26,6 +27,7 @@ const navItems = [
     { href: '/finance', label: 'Finance', icon: TrendingUp },
     { href: '/prices', label: 'Prices', icon: Coins },
     { href: '/reports', label: 'Reports', icon: BarChart3 },
+    { href: '/goals', label: 'Goals', icon: Target },
     { href: '/guide', label: 'Guide', icon: Book },
     { href: '/add', label: 'Add New', icon: PlusCircle },
     { href: '/settings', label: 'Settings', icon: Settings },

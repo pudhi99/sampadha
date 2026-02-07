@@ -388,6 +388,20 @@ export default function PriceTrackerPage() {
     const [silverHistory, setSilverHistory] = useState([])
     const [historyLoading, setHistoryLoading] = useState(true)
 
+    const [todayStored, setTodayStored] = useState(false)
+
+    // Check if today's prices already exist in history
+    useEffect(() => {
+        if (goldHistory.length > 0) {
+            const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })
+            const hasToday = goldHistory.some(g => {
+                const gDate = new Date(g.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })
+                return gDate === today
+            })
+            setTodayStored(hasToday)
+        }
+    }, [goldHistory])
+
     // Fetch directly from GoodReturns (client-side)
     const fetchPrices = async () => {
         setLoading(true)
@@ -425,6 +439,7 @@ export default function PriceTrackerPage() {
     const handleRefresh = async () => {
         setRefreshing(true)
         await fetchPrices()
+        await fetchPriceHistory()
         setRefreshing(false)
     }
 
@@ -471,6 +486,14 @@ export default function PriceTrackerPage() {
     useEffect(() => {
         fetchPrices()
         fetchPriceHistory()
+
+        // Auto-refresh every minute to keep data current if tab is open
+        const interval = setInterval(() => {
+            fetchPrices()
+            fetchPriceHistory()
+        }, 60000)
+
+        return () => clearInterval(interval)
     }, [])
 
     return (
@@ -487,9 +510,17 @@ export default function PriceTrackerPage() {
                             <Clock className="w-3 h-3" /> {lastUpdated}
                         </span>
                     )}
-                    <Button variant="outline" onClick={handleStorePrices} disabled={refreshing || !widgetData?.gold}>
-                        <Database className="w-4 h-4 mr-2" />Store Today
-                    </Button>
+
+                    {todayStored ? (
+                        <Badge variant="outline" className="bg-green-500/10 text-green-500 border-green-500/20">
+                            <Database className="w-3 h-3 mr-1" /> Data Saved Today
+                        </Badge>
+                    ) : (
+                        <Button variant="outline" onClick={handleStorePrices} disabled={refreshing || !widgetData?.gold}>
+                            <Database className="w-4 h-4 mr-2" />Store Today
+                        </Button>
+                    )}
+
                     <Button onClick={handleRefresh} disabled={refreshing}>
                         <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />Refresh
                     </Button>

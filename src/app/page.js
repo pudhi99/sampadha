@@ -13,7 +13,8 @@ import {
   ArrowDownRight,
   AlertTriangle,
   Sparkles,
-  Zap
+  Zap,
+  LineChart as LineChartIcon
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -23,6 +24,8 @@ import { AnimatedCurrency } from '@/components/ui/animated'
 import { WelcomeCard } from '@/components/ui/empty-state'
 import { useAuth } from '@/context/AuthContext'
 import { demoAssets, demoLoans, demoFinanceSchemes, getDemoTotals } from '@/lib/demoData'
+import { getNetWorthHistory, getNetWorthTrend, captureNetWorthSnapshot } from '@/lib/netWorthHistory'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Area, AreaChart } from 'recharts'
 
 // Animation variants
 const containerVariants = {
@@ -168,6 +171,119 @@ function SummaryCard({ title, amount, icon: Icon, color, subtext, href, loading 
   )
 }
 
+// Net Worth History Chart Component
+function NetWorthHistoryChart({ history, trend, loading }) {
+  if (loading) {
+    return (
+      <motion.div variants={itemVariants}>
+        <Card className="border-0 bg-card/50">
+          <CardContent className="p-6">
+            <div className="h-48 rounded bg-muted/50 animate-pulse" />
+          </CardContent>
+        </Card>
+      </motion.div>
+    )
+  }
+
+  if (!history || history.length === 0) {
+    return (
+      <motion.div variants={itemVariants}>
+        <Card className="border-0 bg-card/50">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <LineChartIcon className="w-4 h-4" />
+              Wealth Growth
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-center py-8 text-muted-foreground">
+              <p>No history data yet.</p>
+              <p className="text-sm">Your net worth will be tracked daily.</p>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+    )
+  }
+
+  // Format data for chart
+  const chartData = history.map(h => ({
+    date: new Date(h.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }),
+    netWorth: h.net_worth,
+    assets: h.total_assets,
+    liabilities: h.total_liabilities
+  }))
+
+  const trendColor = trend.changePercent >= 0 ? 'text-emerald-500' : 'text-red-500'
+  const TrendIcon = trend.changePercent >= 0 ? TrendingUp : TrendingDown
+
+  return (
+    <motion.div variants={itemVariants}>
+      <Card className="border-0 bg-card/50">
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <LineChartIcon className="w-4 h-4" />
+              Wealth Growth (30 Days)
+            </CardTitle>
+            {trend.changePercent !== 0 && (
+              <Badge variant="outline" className={`${trendColor} border-current`}>
+                <TrendIcon className="w-3 h-3 mr-1" />
+                {trend.changePercent > 0 ? '+' : ''}{trend.changePercent}%
+              </Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="h-40">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData}>
+                <defs>
+                  <linearGradient id="netWorthGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <XAxis
+                  dataKey="date"
+                  stroke="#888"
+                  tick={{ fontSize: 10 }}
+                  interval="preserveStartEnd"
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  stroke="#888"
+                  tick={{ fontSize: 10 }}
+                  tickFormatter={(v) => `₹${(v / 100000).toFixed(1)}L`}
+                  axisLine={false}
+                  tickLine={false}
+                  width={50}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'hsl(var(--card))',
+                    border: '1px solid hsl(var(--border))',
+                    borderRadius: '8px'
+                  }}
+                  formatter={(value) => [`₹${Number(value).toLocaleString('en-IN')}`, 'Net Worth']}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="netWorth"
+                  stroke="hsl(var(--primary))"
+                  strokeWidth={2}
+                  fill="url(#netWorthGradient)"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </CardContent>
+      </Card>
+    </motion.div>
+  )
+}
+
 // Alerts Card Component
 function AlertsCard({ loans }) {
   // Find delayed or overdue loans
@@ -269,6 +385,8 @@ export default function DashboardPage() {
   const [summary, setSummary] = useState(null)
   const [loans, setLoans] = useState([])
   const [loading, setLoading] = useState(true)
+  const [netWorthHistory, setNetWorthHistory] = useState([])
+  const [netWorthTrend, setNetWorthTrend] = useState({ changePercent: 0 })
 
   useEffect(() => {
     async function fetchData() {
@@ -297,13 +415,29 @@ export default function DashboardPage() {
             }
           })
           setLoans(demoLoans)
+          // Demo: generate fake history
+          setNetWorthHistory([
+            { date: '2026-01-08', net_worth: totals.netWorth * 0.95 },
+            { date: '2026-01-15', net_worth: totals.netWorth * 0.97 },
+            { date: '2026-01-22', net_worth: totals.netWorth * 0.98 },
+            { date: '2026-01-29', net_worth: totals.netWorth * 0.99 },
+            { date: '2026-02-05', net_worth: totals.netWorth }
+          ])
+          setNetWorthTrend({ changePercent: 5.2 })
         } else {
-          const [summaryData, loansData] = await Promise.all([
+          const [summaryData, loansData, historyData, trendData] = await Promise.all([
             getDashboardSummary(),
-            getLoans()
+            getLoans(),
+            getNetWorthHistory(30),
+            getNetWorthTrend(30)
           ])
           setSummary(summaryData)
           setLoans(loansData || [])
+          setNetWorthHistory(historyData || [])
+          setNetWorthTrend(trendData || { changePercent: 0 })
+
+          // Auto-capture today's snapshot if logged in
+          captureNetWorthSnapshot().catch(e => console.warn('Failed to capture snapshot:', e))
         }
       } catch (error) {
         console.error('Error fetching dashboard data:', error)
@@ -365,6 +499,13 @@ export default function DashboardPage() {
           loading={loading}
         />
       </div>
+
+      {/* Net Worth History Chart */}
+      <NetWorthHistoryChart
+        history={netWorthHistory}
+        trend={netWorthTrend}
+        loading={loading}
+      />
 
       {/* Quick Actions */}
       <QuickActions />

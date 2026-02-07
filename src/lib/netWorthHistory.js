@@ -8,6 +8,8 @@ import { getAssets } from './db'
 import { getLoans } from './db'
 import { getFinanceSchemes } from './db'
 
+import { getAllFinancePayments } from './db'
+
 /**
  * Calculate current net worth from all sources
  * @returns {Promise<Object>} { netWorth, totalAssets, totalLiabilities }
@@ -15,17 +17,28 @@ import { getFinanceSchemes } from './db'
 export async function calculateCurrentNetWorth() {
     try {
         // Fetch all data
-        const [assets, loansGiven, loansTaken, schemes] = await Promise.all([
+        const [assets, loansGiven, loansTaken, schemes, payments] = await Promise.all([
             getAssets(),
             getLoans('GIVEN'),
             getLoans('TAKEN'),
-            getFinanceSchemes()
+            getFinanceSchemes(),
+            getAllFinancePayments()
         ])
 
         // Calculate total assets
         const assetValue = (assets || []).reduce((sum, a) => sum + Number(a.current_value || 0), 0)
         const loansGivenValue = (loansGiven || []).reduce((sum, l) => sum + Number(l.principal || 0), 0)
-        const schemesValue = (schemes || []).reduce((sum, s) => sum + Number(s.principal || 0), 0)
+
+        const schemesValue = (schemes || []).reduce((sum, s) => {
+            // For recurring schemes, use actual payments
+            if (['CHIT_FUND', 'POST_OFFICE_RD', 'PPF'].includes(s.scheme_type)) {
+                const schemePayments = payments?.filter(p => p.scheme_id === s.id) || []
+                const actualPaid = schemePayments.reduce((psum, p) => psum + Number(p.amount), 0)
+                return sum + actualPaid
+            }
+            // For others (FD, Lending, Stocks), use principal
+            return sum + Number(s.principal || 0)
+        }, 0)
 
         const totalAssets = assetValue + loansGivenValue + schemesValue
 
@@ -56,9 +69,16 @@ export async function calculateCurrentNetWorth() {
  */
 export async function captureNetWorthSnapshot() {
     try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) {
+            console.warn('User not authenticated, skipping snapshot')
+            return { success: false, error: 'User not authenticated' }
+        }
+
         const { netWorth, totalAssets, totalLiabilities } = await calculateCurrentNetWorth()
 
         const snapshot = {
+            user_id: user.id,
             date: new Date().toISOString().split('T')[0], // YYYY-MM-DD
             net_worth: netWorth,
             total_assets: totalAssets,

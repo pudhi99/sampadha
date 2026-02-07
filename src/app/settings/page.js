@@ -13,7 +13,10 @@ import {
     ChevronRight,
     Sparkles,
     Bell,
-    Send
+    Send,
+    FileText,
+    FileJson,
+    Table
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -46,10 +49,24 @@ const settingsGroups = [
         title: 'Data',
         items: [
             {
-                id: 'export',
-                icon: Download,
-                label: 'Export Data',
-                description: 'Download all your data as JSON',
+                id: 'export-pdf',
+                icon: FileText,
+                label: 'Export PDF Report',
+                description: 'Download financial summary as PDF',
+                action: 'button'
+            },
+            {
+                id: 'export-json',
+                icon: FileJson,
+                label: 'Export JSON Backup',
+                description: 'Full data backup for restoration',
+                action: 'button'
+            },
+            {
+                id: 'export-csv',
+                icon: Table,
+                label: 'Export CSV',
+                description: 'Spreadsheet format for Excel/Sheets',
                 action: 'button'
             },
             {
@@ -196,21 +213,19 @@ function SettingItem({ item }) {
     const fileInputRef = React.useRef(null)
 
     const handleAction = async () => {
-        if (item.id === 'export') {
+        if (item.id === 'export-pdf' || item.id === 'export-json' || item.id === 'export-csv') {
             // Export functionality
             setExporting(true)
             try {
-                const { exportAllDataToJSON, downloadJSON, exportToCSV, downloadCSV } = await import('@/lib/dataExport')
+                const { exportAllDataToJSON, downloadJSON, exportToCSV, downloadCSV, exportToPDF } = await import('@/lib/dataExport')
 
-                // Show options dialog
-                const format = confirm('Click OK for JSON, Cancel for CSV')
-
-                if (format) {
-                    // Export as JSON
+                // Direct export based on button type
+                if (item.id === 'export-pdf') {
+                    await exportToPDF()
+                } else if (item.id === 'export-json') {
                     const data = await exportAllDataToJSON()
                     downloadJSON(data)
-                } else {
-                    // Export as CSV
+                } else if (item.id === 'export-csv') {
                     const csvData = await exportToCSV()
                     downloadCSV(csvData)
                 }

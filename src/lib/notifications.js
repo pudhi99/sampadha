@@ -58,6 +58,9 @@ export async function createNotification({ title, message, type, metal = null, p
  */
 export async function getUnreadNotifications() {
     try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session) return []
+
         const { data, error } = await supabase
             .from('notifications')
             .select('*')
@@ -67,7 +70,9 @@ export async function getUnreadNotifications() {
         if (error) throw error
         return data || []
     } catch (error) {
-        console.error('Error fetching notifications:', error)
+        if (Object.keys(error).length > 0) {
+            console.error('Error fetching notifications:', error)
+        }
         return []
     }
 }
@@ -79,6 +84,9 @@ export async function getUnreadNotifications() {
  */
 export async function getAllNotifications(limit = 50) {
     try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session) return []
+
         const { data, error } = await supabase
             .from('notifications')
             .select('*')
@@ -88,7 +96,9 @@ export async function getAllNotifications(limit = 50) {
         if (error) throw error
         return data || []
     } catch (error) {
-        console.error('Error fetching all notifications:', error)
+        if (Object.keys(error).length > 0) {
+            console.error('Error fetching all notifications:', error)
+        }
         return []
     }
 }
@@ -610,6 +620,9 @@ export async function createFinanceReminders() {
  */
 export async function getUnreadCount() {
     try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session) return 0
+
         const { count, error } = await supabase
             .from('notifications')
             .select('*', { count: 'exact', head: true })
@@ -618,7 +631,9 @@ export async function getUnreadCount() {
         if (error) throw error
         return count || 0
     } catch (error) {
-        console.error('Error getting unread count:', error)
+        if (Object.keys(error).length > 0) {
+            console.error('Error getting unread count:', error)
+        }
         return 0
     }
 }

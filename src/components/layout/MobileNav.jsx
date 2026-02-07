@@ -9,13 +9,14 @@ import {
     HandCoins,
     BarChart3,
     PlusCircle,
+    Target,
 } from 'lucide-react'
 
 const navItems = [
     { href: '/', label: 'Home', icon: LayoutDashboard },
     { href: '/assets', label: 'Assets', icon: Wallet },
     { href: '/add', label: 'Add', icon: PlusCircle, isSpecial: true },
-    { href: '/loans/given', label: 'Loans', icon: HandCoins },
+    { href: '/goals', label: 'Goals', icon: Target },
     { href: '/reports', label: 'Reports', icon: BarChart3 },
 ]
 

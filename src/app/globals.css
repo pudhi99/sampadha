@@ -5,18 +5,37 @@
 
 /* Custom animations for Sampadha */
 @keyframes float {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-6px); }
+
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+
+  50% {
+    transform: translateY(-6px);
+  }
 }
 
 @keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 5px var(--glow-color), 0 0 10px var(--glow-color); }
-  50% { box-shadow: 0 0 15px var(--glow-color), 0 0 25px var(--glow-color); }
+
+  0%,
+  100% {
+    box-shadow: 0 0 5px var(--glow-color), 0 0 10px var(--glow-color);
+  }
+
+  50% {
+    box-shadow: 0 0 15px var(--glow-color), 0 0 25px var(--glow-color);
+  }
 }
 
 @keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
+  }
 }
 
 @keyframes fade-in-up {
@@ -24,6 +43,7 @@
     opacity: 0;
     transform: translateY(20px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -35,6 +55,7 @@
     opacity: 0;
     transform: scale(0.95);
   }
+
   to {
     opacity: 1;
     transform: scale(1);
@@ -82,7 +103,7 @@
   --radius-2xl: calc(var(--radius) + 8px);
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-4xl: calc(var(--radius) + 16px);
-  
+
   /* Custom colors for Sampadha */
   --color-success: var(--success);
   --color-success-foreground: var(--success-foreground);
@@ -125,7 +146,7 @@
   --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
   --sidebar-border: oklch(0.92 0.004 286.32);
   --sidebar-ring: oklch(0.705 0.015 286.067);
-  
+
   /* Sampadha custom */
   --success: oklch(0.72 0.19 142);
   --success-foreground: oklch(0.98 0 0);
@@ -155,14 +176,19 @@
   --border: oklch(0.28 0.03 280);
   --input: oklch(0.22 0.03 280);
   --ring: oklch(0.65 0.15 280);
-  
+
   /* Vibrant chart colors */
-  --chart-1: oklch(0.7 0.22 280);   /* Purple */
-  --chart-2: oklch(0.72 0.19 160);  /* Teal */
-  --chart-3: oklch(0.75 0.18 85);   /* Gold */
-  --chart-4: oklch(0.68 0.22 330);  /* Pink */
-  --chart-5: oklch(0.7 0.2 45);     /* Orange */
-  
+  --chart-1: oklch(0.7 0.22 280);
+  /* Purple */
+  --chart-2: oklch(0.72 0.19 160);
+  /* Teal */
+  --chart-3: oklch(0.75 0.18 85);
+  /* Gold */
+  --chart-4: oklch(0.68 0.22 330);
+  /* Pink */
+  --chart-5: oklch(0.7 0.2 45);
+  /* Orange */
+
   --sidebar: oklch(0.14 0.025 280);
   --sidebar-foreground: oklch(0.95 0.01 280);
   --sidebar-primary: oklch(0.7 0.18 280);
@@ -171,7 +197,7 @@
   --sidebar-accent-foreground: oklch(0.95 0.01 280);
   --sidebar-border: oklch(0.28 0.03 280);
   --sidebar-ring: oklch(0.65 0.15 280);
-  
+
   /* Sampadha custom - vivid */
   --success: oklch(0.72 0.22 145);
   --success-foreground: oklch(0.12 0 0);
@@ -185,53 +211,86 @@
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground antialiased;
+  }
+
+  /* Mobile touch optimization - prevent accidental text selection */
+  button,
+  a,
+  .clickable,
+  [role="button"] {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    user-select: none;
+  }
+
+  /* Allow text selection only on actual text content */
+  p,
+  span,
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  li,
+  td,
+  th,
+  label {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Prevent double-tap zoom on interactive elements */
+  input,
+  textarea,
+  select,
+  button,
+  a {
+    touch-action: manipulation;
   }
 }
 
 @layer utilities {
+
   /* Animation utilities */
   .animate-float {
     animation: float 3s ease-in-out infinite;
   }
-  
+
   .animate-fade-in-up {
     animation: fade-in-up 0.5s ease-out forwards;
   }
-  
+
   .animate-scale-in {
     animation: scale-in 0.3s ease-out forwards;
   }
-  
+
   .animate-shimmer {
-    background: linear-gradient(
-      90deg,
-      transparent,
-      rgba(255, 255, 255, 0.08),
-      transparent
-    );
+    background: linear-gradient(90deg,
+        transparent,
+        rgba(255, 255, 255, 0.08),
+        transparent);
     background-size: 200% 100%;
     animation: shimmer 2s infinite;
   }
-  
+
   /* Glassmorphism */
   .glass {
     background: rgba(255, 255, 255, 0.05);
     backdrop-filter: blur(12px);
     border: 1px solid rgba(255, 255, 255, 0.1);
   }
-  
+
   .glass-card {
-    background: linear-gradient(
-      135deg,
-      rgba(255, 255, 255, 0.08) 0%,
-      rgba(255, 255, 255, 0.02) 100%
-    );
+    background: linear-gradient(135deg,
+        rgba(255, 255, 255, 0.08) 0%,
+        rgba(255, 255, 255, 0.02) 100%);
     backdrop-filter: blur(16px);
     border: 1px solid rgba(255, 255, 255, 0.1);
   }
-  
+
   /* Gradient text */
   .gradient-text {
     background: linear-gradient(135deg, var(--primary) 0%, var(--chart-2) 100%);
@@ -239,38 +298,38 @@
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
-  
+
   /* Floating card effect */
   .floating-card {
     transition: transform 0.3s ease, box-shadow 0.3s ease;
   }
-  
+
   .floating-card:hover {
     transform: translateY(-4px);
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
   }
-  
+
   /* Glow effects */
   .glow-success {
     --glow-color: oklch(0.72 0.22 145 / 0.4);
     box-shadow: 0 0 20px var(--glow-color);
   }
-  
+
   .glow-warning {
     --glow-color: oklch(0.78 0.2 75 / 0.4);
     box-shadow: 0 0 20px var(--glow-color);
   }
-  
+
   .glow-danger {
     --glow-color: oklch(0.65 0.25 25 / 0.4);
     box-shadow: 0 0 20px var(--glow-color);
   }
-  
+
   .glow-gold {
     --glow-color: oklch(0.8 0.18 85 / 0.4);
     box-shadow: 0 0 20px var(--glow-color);
   }
-  
+
   .glow-primary {
     --glow-color: oklch(0.7 0.18 280 / 0.4);
     box-shadow: 0 0 20px var(--glow-color);
@@ -283,18 +342,29 @@
 
 /* Scrollbar track animation keyframes */
 @keyframes scrollbar-glow {
-  0%, 100% { 
+
+  0%,
+  100% {
     box-shadow: inset 0 0 5px oklch(0.7 0.18 280 / 0.2);
   }
-  50% { 
+
+  50% {
     box-shadow: inset 0 0 10px oklch(0.7 0.18 280 / 0.4);
   }
 }
 
 @keyframes thumb-shine {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
 }
 
 /* Base scrollbar styling for all elements */
@@ -310,42 +380,36 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: linear-gradient(
-    180deg,
-    oklch(0.12 0.02 280 / 0.3) 0%,
-    oklch(0.16 0.025 280 / 0.2) 100%
-  );
+  background: linear-gradient(180deg,
+      oklch(0.12 0.02 280 / 0.3) 0%,
+      oklch(0.16 0.025 280 / 0.2) 100%);
   border-radius: 10px;
   margin: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: linear-gradient(
-    135deg,
-    oklch(0.5 0.15 280) 0%,
-    oklch(0.6 0.18 280) 50%,
-    oklch(0.5 0.15 280) 100%
-  );
+  background: linear-gradient(135deg,
+      oklch(0.5 0.15 280) 0%,
+      oklch(0.6 0.18 280) 50%,
+      oklch(0.5 0.15 280) 100%);
   background-size: 200% 200%;
   border-radius: 10px;
   border: 2px solid transparent;
   background-clip: padding-box;
-  box-shadow: 
+  box-shadow:
     inset 0 1px 0 oklch(1 0 0 / 0.1),
     0 2px 8px oklch(0.5 0.15 280 / 0.3);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(
-    135deg,
-    oklch(0.55 0.18 280) 0%,
-    oklch(0.7 0.22 280) 50%,
-    oklch(0.55 0.18 280) 100%
-  );
+  background: linear-gradient(135deg,
+      oklch(0.55 0.18 280) 0%,
+      oklch(0.7 0.22 280) 50%,
+      oklch(0.55 0.18 280) 100%);
   background-size: 200% 200%;
   animation: thumb-shine 2s ease infinite;
-  box-shadow: 
+  box-shadow:
     inset 0 1px 0 oklch(1 0 0 / 0.15),
     0 4px 16px oklch(0.6 0.2 280 / 0.5),
     0 0 20px oklch(0.6 0.2 280 / 0.3);
@@ -353,12 +417,10 @@
 }
 
 ::-webkit-scrollbar-thumb:active {
-  background: linear-gradient(
-    135deg,
-    oklch(0.45 0.15 280) 0%,
-    oklch(0.55 0.18 280) 100%
-  );
-  box-shadow: 
+  background: linear-gradient(135deg,
+      oklch(0.45 0.15 280) 0%,
+      oklch(0.55 0.18 280) 100%);
+  box-shadow:
     inset 0 2px 4px oklch(0 0 0 / 0.2),
     0 1px 4px oklch(0.5 0.15 280 / 0.4);
 }
@@ -369,36 +431,30 @@
 
 /* Light theme scrollbar */
 :root:not(.dark) ::-webkit-scrollbar-track {
-  background: linear-gradient(
-    180deg,
-    oklch(0.95 0.01 280 / 0.5) 0%,
-    oklch(0.9 0.015 280 / 0.3) 100%
-  );
+  background: linear-gradient(180deg,
+      oklch(0.95 0.01 280 / 0.5) 0%,
+      oklch(0.9 0.015 280 / 0.3) 100%);
 }
 
 :root:not(.dark) ::-webkit-scrollbar-thumb {
-  background: linear-gradient(
-    135deg,
-    oklch(0.6 0.12 280) 0%,
-    oklch(0.7 0.15 280) 50%,
-    oklch(0.6 0.12 280) 100%
-  );
+  background: linear-gradient(135deg,
+      oklch(0.6 0.12 280) 0%,
+      oklch(0.7 0.15 280) 50%,
+      oklch(0.6 0.12 280) 100%);
   background-size: 200% 200%;
-  box-shadow: 
+  box-shadow:
     inset 0 1px 0 oklch(1 0 0 / 0.3),
     0 2px 6px oklch(0.5 0.1 280 / 0.2);
 }
 
 :root:not(.dark) ::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(
-    135deg,
-    oklch(0.55 0.15 280) 0%,
-    oklch(0.65 0.18 280) 50%,
-    oklch(0.55 0.15 280) 100%
-  );
+  background: linear-gradient(135deg,
+      oklch(0.55 0.15 280) 0%,
+      oklch(0.65 0.18 280) 50%,
+      oklch(0.55 0.15 280) 100%);
   background-size: 200% 200%;
   animation: thumb-shine 2s ease infinite;
-  box-shadow: 
+  box-shadow:
     inset 0 1px 0 oklch(1 0 0 / 0.3),
     0 4px 12px oklch(0.5 0.15 280 / 0.35);
 }
@@ -438,29 +494,22 @@
 
 /* Colored scrollbar variants */
 .scrollbar-gold::-webkit-scrollbar-thumb {
-  background: linear-gradient(
-    135deg,
-    oklch(0.75 0.15 85) 0%,
-    oklch(0.85 0.2 85) 50%,
-    oklch(0.75 0.15 85) 100%
-  );
+  background: linear-gradient(135deg,
+      oklch(0.75 0.15 85) 0%,
+      oklch(0.85 0.2 85) 50%,
+      oklch(0.75 0.15 85) 100%);
 }
 
 .scrollbar-success::-webkit-scrollbar-thumb {
-  background: linear-gradient(
-    135deg,
-    oklch(0.6 0.18 145) 0%,
-    oklch(0.72 0.22 145) 50%,
-    oklch(0.6 0.18 145) 100%
-  );
+  background: linear-gradient(135deg,
+      oklch(0.6 0.18 145) 0%,
+      oklch(0.72 0.22 145) 50%,
+      oklch(0.6 0.18 145) 100%);
 }
 
 .scrollbar-danger::-webkit-scrollbar-thumb {
-  background: linear-gradient(
-    135deg,
-    oklch(0.55 0.2 25) 0%,
-    oklch(0.65 0.25 25) 50%,
-    oklch(0.55 0.2 25) 100%
-  );
+  background: linear-gradient(135deg,
+      oklch(0.55 0.2 25) 0%,
+      oklch(0.65 0.25 25) 50%,
+      oklch(0.55 0.2 25) 100%);
 }
-
