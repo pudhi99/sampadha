@@ -103,6 +103,11 @@ export function PushNotificationPrompt() {
             if (result !== 'granted') {
                 console.log('Notification permission denied')
                 setLoading(false)
+
+                // Show instruction on how to enable if denied
+                if (result === 'denied') {
+                    alert('Notifications are blocked. Please click the lock icon in the address bar, find "Notifications", and select "Allow" or "Reset permission". Then reload the page.')
+                }
                 return
             }
 
